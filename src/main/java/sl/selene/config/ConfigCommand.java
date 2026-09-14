@@ -1,6 +1,5 @@
 package sl.selene.config;
 
-import java.awt.Desktop;
 import java.io.File;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -176,13 +175,6 @@ public final class ConfigCommand implements Command {
       try {
          if (!folder.exists()) {
             folder.mkdirs();
-         }
-         if (Desktop.isDesktopSupported()) {
-            Desktop desktop = Desktop.getDesktop();
-            if (desktop.isSupported(Desktop.Action.OPEN)) {
-               desktop.open(folder);
-               opened = true;
-            }
          }
       } catch (Exception ignored) {
       }

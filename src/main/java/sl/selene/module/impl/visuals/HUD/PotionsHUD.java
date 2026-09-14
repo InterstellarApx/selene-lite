@@ -1,6 +1,5 @@
 package sl.selene.module.impl.visuals.HUD;
 
-import java.awt.Color;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -36,7 +35,7 @@ public class PotionsHUD {
    private static final float DUR_SIZE = 11.0F;
    private static final float BAR_H = 2.5F;
    private static final float BAR_BOTTOM_OFFSET = 5.0F;
-   private static final int HARMFUL_TEXT = new Color(16734547).getRGB();
+   private static final int HARMFUL_TEXT = 0xFFFF5953;
 
    private static final Map<RegistryEntry<StatusEffect>, Integer> maxDurations = new HashMap<>();
    private static final Map<RegistryEntry<StatusEffect>, Float> animatedWidths = new HashMap<>();

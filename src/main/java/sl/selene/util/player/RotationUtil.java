@@ -1,16 +1,25 @@
 package sl.selene.util.player;
 
+import java.util.Optional;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.minecraft.entity.Entity;
+import net.minecraft.network.packet.Packet;
+import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket;
+import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.EntityHitResult;
+import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 import sl.selene.event.EventInit;
 import sl.selene.event.EventManager;
-import sl.selene.event.impl.EventScreen;
+import sl.selene.event.impl.EventPacket;
+import sl.selene.event.lifecycle.ClientTickEvent;
 import sl.selene.module.api.Module;
 import sl.selene.util.other.IMinecraft;
 
@@ -35,11 +44,16 @@ public final class RotationUtil implements IMinecraft {
    private static final float VISIBLE_SPEED_MULT = 1.0F;
    private static final float JITTER = 0.3F;
    private static final double MICRO_PAUSE_CHANCE = 0.035D;
+   private static final float SETTLE_TOLERANCE = 0.5F;
+   private static final float SETTLE_SPEED = 180.0F;
+   private static final long STALE_AFTER_NANOS = 500_000_000L;
+   private static final float TICK_SECONDS = 0.05F;
 
    private static float serverYaw;
    private static float serverPitch;
    private static boolean hasSilentRotation;
    private static boolean isTracking;
+   private static boolean isSettling;
    private static Module currentController;
    private static int currentPriority = Integer.MIN_VALUE;
 
@@ -48,16 +62,14 @@ public final class RotationUtil implements IMinecraft {
    private static AimType activeAimType = AimType.REGULAR;
    private static float activeSpeed;
    private static long lastRefreshNanos;
-   private static final long STALE_AFTER_NANOS = 500_000_000L;
 
-   private static long lastFrameNanos;
    private static boolean reactionDone;
    private static long nextAssistAt;
    private static long pauseUntil;
    private static double jitterPhase = Math.random() * Math.PI * 2.0;
    private static double jitterFreq = 9.0 + Math.random() * 5.0;
 
-   private static boolean frameListenerRegistered;
+   private static boolean listenerRegistered;
 
    private RotationUtil() {
    }
@@ -84,6 +96,19 @@ public final class RotationUtil implements IMinecraft {
    }
 
    public static void stopTracking() {
+      if (hasSilentRotation && mc.player != null) {
+         isSettling = true;
+         activePoint = null;
+         currentController = null;
+         currentPriority = Integer.MIN_VALUE;
+         resetHumanizer();
+         ensureListener();
+         return;
+      }
+      hardStop();
+   }
+
+   private static void hardStop() {
       if (mc.player != null) {
          serverYaw = mc.player.getYaw();
          serverPitch = mc.player.getPitch();
@@ -93,6 +118,7 @@ public final class RotationUtil implements IMinecraft {
       }
       hasSilentRotation = false;
       isTracking = false;
+      isSettling = false;
       currentController = null;
       currentPriority = Integer.MIN_VALUE;
       activePoint = null;
@@ -122,44 +148,78 @@ public final class RotationUtil implements IMinecraft {
       if (freshController) {
          resetHumanizer();
       }
+      isSettling = false;
 
       activePoint = point;
       activeSilent = silent;
       activeAimType = aimType;
       activeSpeed = speed;
       lastRefreshNanos = System.nanoTime();
-      ensureFrameListener();
+      ensureListener();
       return true;
    }
 
-   private static void ensureFrameListener() {
-      if (frameListenerRegistered) {
+   private static void ensureListener() {
+      if (listenerRegistered) {
          return;
       }
-      frameListenerRegistered = true;
+      listenerRegistered = true;
       EventManager.register(new Object() {
          @EventInit
-         public void onFrame(EventScreen event) {
-            stepFrame();
+         public void onTick(ClientTickEvent event) {
+            stepTick();
+         }
+
+         @EventInit
+         public void onPacket(EventPacket event) {
+            handlePacket(event);
          }
       });
    }
 
-   private static void stepFrame() {
-      if (activePoint == null || currentController == null || mc.player == null || mc.world == null) {
+   private static void handlePacket(EventPacket event) {
+      if (event.getPacket() instanceof PlayerPositionLookS2CPacket look) {
+         if (hasSilentRotation) {
+            float yaw = look.change().yaw();
+            serverYaw = serverYaw + MathHelper.wrapDegrees(yaw - serverYaw);
+            serverPitch = MathHelper.clamp(look.change().pitch(), -90.0F, 90.0F);
+         }
+         return;
+      }
+      if (!event.isSend() || !hasSilentRotation) {
+         return;
+      }
+      Packet<?> packet = event.getPacket();
+      if (packet instanceof PlayerInteractItemC2SPacket interact) {
+         if (interact.getYaw() != serverYaw || interact.getPitch() != serverPitch) {
+            event.setPacket(new PlayerInteractItemC2SPacket(interact.getHand(), interact.getSequence(),
+                  serverYaw, serverPitch));
+         }
+      }
+   }
+
+   private static void stepTick() {
+      if (mc.player == null || mc.world == null) {
+         return;
+      }
+      if (isSettling) {
+         stepSettling();
+         return;
+      }
+      if (activePoint == null || currentController == null) {
          return;
       }
       if (System.nanoTime() - lastRefreshNanos > STALE_AFTER_NANOS) {
          activePoint = null;
+         stopTracking();
          return;
       }
       if (mc.currentScreen != null) {
          return;
       }
 
-      float delta = getDeltaSeconds();
-      float pt = mc.getRenderTickCounter().getTickProgress(false);
-      float[] targetRot = calculate(mc.player.getCameraPosVec(pt), activePoint);
+      float delta = TICK_SECONDS;
+      float[] targetRot = calculate(mc.player.getEyePos(), activePoint);
 
       float baseYaw;
       float basePitch;
@@ -231,6 +291,29 @@ public final class RotationUtil implements IMinecraft {
       applyStep(baseYaw, basePitch, yawStep, pitchStep, activeSilent);
    }
 
+   private static void stepSettling() {
+      if (mc.player == null) {
+         hardStop();
+         return;
+      }
+      float targetYaw = mc.player.getYaw();
+      float targetPitch = mc.player.getPitch();
+      float yawDiff = MathHelper.wrapDegrees(targetYaw - serverYaw);
+      float pitchDiff = targetPitch - serverPitch;
+
+      if (Math.abs(yawDiff) <= SETTLE_TOLERANCE && Math.abs(pitchDiff) <= SETTLE_TOLERANCE) {
+         hardStop();
+         return;
+      }
+
+      float maxStep = Math.max(0.05F, SETTLE_SPEED * TICK_SECONDS);
+      float yawStep = MathHelper.clamp(yawDiff, -maxStep, maxStep);
+      float pitchStep = MathHelper.clamp(pitchDiff, -maxStep, maxStep);
+      serverYaw = serverYaw + yawStep;
+      serverPitch = MathHelper.clamp(serverPitch + pitchStep, -90.0F, 90.0F);
+      hasSilentRotation = true;
+   }
+
    private static void applyStep(float baseYaw, float basePitch, float yawStep, float pitchStep, boolean silent) {
       double sens = (Double) mc.options.getMouseSensitivity().getValue();
       double f = sens * 0.6D + 0.2D;
@@ -264,10 +347,10 @@ public final class RotationUtil implements IMinecraft {
          serverPitch = mc.player.getPitch();
       }
       hasSilentRotation = false;
+      isSettling = false;
    }
 
    private static void resetHumanizer() {
-      lastFrameNanos = 0L;
       reactionDone = false;
       nextAssistAt = 0L;
       pauseUntil = 0L;
@@ -275,14 +358,46 @@ public final class RotationUtil implements IMinecraft {
       jitterFreq = 9.0 + Math.random() * 5.0;
    }
 
-   private static float getDeltaSeconds() {
-      long now = System.nanoTime();
-      float delta = lastFrameNanos == 0L ? 0.016F : (now - lastFrameNanos) / 1_000_000_000.0F;
-      lastFrameNanos = now;
-      if (delta <= 0.0F || delta > 0.1F) {
-         delta = 0.016F;
+
+   public static HitResult recomputeTrace(HitResult vanilla, float partialTick, double reach) {
+      if (!hasSilentRotation || mc.player == null || mc.world == null) {
+         return vanilla;
       }
-      return delta;
+      Vec3d eye = mc.player.getCameraPosVec(partialTick);
+      Vec3d look = getRotationVector(serverPitch, serverYaw);
+      Vec3d end = eye.add(look.multiply(reach));
+
+      BlockHitResult blockHit = mc.world.raycast(
+            new RaycastContext(eye, end, RaycastContext.ShapeType.OUTLINE, RaycastContext.FluidHandling.NONE, mc.player));
+      double maxDistSq = reach * reach;
+      if (blockHit != null && blockHit.getType() == HitResult.Type.BLOCK) {
+         maxDistSq = eye.squaredDistanceTo(blockHit.getPos());
+      }
+
+      EntityHitResult bestEntity = null;
+      double bestSq = maxDistSq;
+      for (Entity entity : mc.world.getEntities()) {
+         if (entity == mc.player || entity == mc.getCameraEntity()) {
+            continue;
+         }
+         Box box = entity.getBoundingBox();
+         Optional<Vec3d> hit = box.raycast(eye, end);
+         if (hit.isPresent()) {
+            double distSq = eye.squaredDistanceTo(hit.get());
+            if (distSq <= bestSq) {
+               bestSq = distSq;
+               bestEntity = new EntityHitResult(entity, hit.get());
+            }
+         }
+      }
+
+      if (bestEntity != null) {
+         return bestEntity;
+      }
+      if (blockHit != null && blockHit.getType() == HitResult.Type.BLOCK) {
+         return blockHit;
+      }
+      return BlockHitResult.createMissed(end, Direction.getFacing(look), BlockPos.ofFloored(end));
    }
 
 

@@ -3,8 +3,6 @@ package sl.selene.module.impl.combat;
 import java.util.Optional;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.hit.BlockHitResult;
@@ -13,7 +11,6 @@ import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
-import org.lwjgl.glfw.GLFW;
 import sl.selene.Selene;
 import sl.selene.event.EventInit;
 import sl.selene.event.impl.EventChangeWorld;
@@ -25,8 +22,8 @@ import sl.selene.module.api.setting.Setting;
 import sl.selene.module.api.setting.impl.BooleanSetting;
 import sl.selene.module.api.setting.impl.ModeSetting;
 import sl.selene.module.api.setting.impl.SliderSetting;
-import sl.selene.util.player.CrosshairPin;
-import sl.selene.util.player.RotationUtil;
+import sl.selene.util.engine.HitEngine;
+import sl.selene.util.engine.SlotEngine;
 
 @IModule(
    name = "Shield Breaker",
@@ -39,7 +36,6 @@ public class ShieldBreaker extends Module {
 
    public static SliderSetting reach = new SliderSetting("Reach", 3.0F, 2.5F, 3.0F, 0.01F, false);
    public static SliderSetting breakDelay = new SliderSetting("Break Delay (ticks)", 1.0F, 1.0F, 5.0F, 1.0F, false);
-   public static ModeSetting rotate = new ModeSetting("Rotate", "Off", "Off", "Silent");
    public static BooleanSetting switchToAxe = new BooleanSetting("Switch To Axe", true);
    public static BooleanSetting switchBack = new BooleanSetting("Switch Back", true);
    public static ModeSetting fireMode = new ModeSetting("Fire Mode", "Always", "Always", "Hold LMB");
@@ -53,27 +49,18 @@ public class ShieldBreaker extends Module {
    public static BooleanSetting noInvisible = new BooleanSetting("No Invisible", true);
 
    private static final double CAST_PADDING = 0.2;
-   private static final long CLICK_HOLD_MIN = 30L;
-   private static final long CLICK_HOLD_SPREAD = 55L;
    private static final int FOLLOW_UP_TIMEOUT = 10;
    private static final int BREAK_RETRY_FLOOR = 5;
-   private static final float ROTATE_TOLERANCE = 3.0F;
-   private static final float ROTATE_SPEED = 140.0F;
 
-   private boolean clickHeld;
-   private long clickReleaseAt;
-   private int boundAttackKeyCode = -1;
-   private InputUtil.Key boundAttackKey;
-   private int lastAttackAge = Integer.MIN_VALUE;
-   private int prevSlot = -1;
-   private int swapAge = -1;
+   private final HitEngine hit = new HitEngine();
+   private final SlotEngine slots = new SlotEngine();
    private int lastBreakAge = -1;
    private int followUpTargetId = -1;
    private int shieldBreakAge = -1;
 
    public ShieldBreaker() {
       this.addSettings(new Setting[] {
-         reach, breakDelay, switchToAxe, switchBack, rotate, fireMode,
+         reach, breakDelay, switchToAxe, switchBack, fireMode,
          followUpHit, followUpDelay, followUpCharge, teams, ignoreFriends, noInvisible
       });
    }
@@ -86,13 +73,13 @@ public class ShieldBreaker extends Module {
    @Override
    public void onDisable() {
       super.onDisable();
-      releaseClick();
+      hit.release();
       finishFollowUp();
    }
 
    @EventInit
    public void onWorldChange(EventChangeWorld event) {
-      releaseClick();
+      hit.release();
       finishFollowUp();
       this.lastBreakAge = -1;
    }
@@ -103,16 +90,15 @@ public class ShieldBreaker extends Module {
          return;
       }
       if (mc.currentScreen != null || mc.player.isUsingItem()) {
-         releaseClick();
+         hit.release();
          finishFollowUp();
          return;
       }
 
-      if (clickHeld) {
-         if (System.currentTimeMillis() >= clickReleaseAt) {
-            releaseClick();
+      if (hit.isHeld()) {
+         hit.tick();
+         if (!hit.isHeld()) {
             restoreSlot();
-            releaseRotation();
          }
          return;
       }
@@ -123,18 +109,12 @@ public class ShieldBreaker extends Module {
       }
 
       if (!shouldFire()) {
-         releaseRotation();
          return;
       }
 
       PlayerEntity target = findBlockingTarget(hitReach());
       if (target == null) {
          restoreSlot();
-         releaseRotation();
-         return;
-      }
-
-      if (!aimAt(target)) {
          return;
       }
 
@@ -146,22 +126,16 @@ public class ShieldBreaker extends Module {
 
       if (!CombatUtil.isWeaponType(mc.player.getMainHandStack(), "Axe")) {
          if (!switchToAxe.get()) {
-            releaseRotation();
             return;
          }
          int axeSlot = findAxeSlot();
          if (axeSlot < 0) {
-            releaseRotation();
             return;
          }
-         if (prevSlot < 0) {
-            prevSlot = mc.player.getInventory().getSelectedSlot();
-         }
-         selectSlot(axeSlot);
-         this.swapAge = mc.player.age;
+         this.slots.begin(axeSlot);
       }
 
-      if (this.swapAge >= 0 && mc.player.age - this.swapAge < Math.max(1, Math.round(breakDelay.get()))) {
+      if (this.slots.isActive() && this.slots.ageSinceSwap() < Math.max(1, Math.round(breakDelay.get()))) {
          return;
       }
       if (this.lastBreakAge >= 0 && mc.player.age >= this.lastBreakAge
@@ -171,12 +145,12 @@ public class ShieldBreaker extends Module {
       if (mc.player.getAttackCooldownProgress(0.5F) <= 0.0F) {
          return;
       }
-      if (mc.player.age == lastAttackAge) {
+      if (mc.player.age == this.hit.getLastAttackAge()) {
          return;
       }
 
       if (click(hit)) {
-         this.swapAge = -1;
+         this.slots.clearSwapTiming();
          this.lastBreakAge = mc.player.age;
          if (followUpHit.get()) {
             this.followUpTargetId = target.getId();
@@ -212,13 +186,7 @@ public class ShieldBreaker extends Module {
       if (mc.player.getAttackCooldownProgress(0.5F) < required) {
          return;
       }
-      if (mc.player.age == lastAttackAge) {
-         return;
-      }
-      if (!aimAt(player)) {
-         if (ticksSinceBreak >= delay + FOLLOW_UP_TIMEOUT) {
-            finishFollowUp();
-         }
+      if (mc.player.age == hit.getLastAttackAge()) {
          return;
       }
 
@@ -235,25 +203,6 @@ public class ShieldBreaker extends Module {
       this.followUpTargetId = -1;
       this.shieldBreakAge = -1;
       this.restoreSlot();
-      releaseRotation();
-   }
-
-   private boolean aimAt(PlayerEntity target) {
-      if (!rotate.is("Silent")) {
-         return true;
-      }
-      Vec3d point = CombatUtil.aimPoint(target, "Chest");
-      if (!RotationUtil.aim(this, RotationUtil.PRIORITY_HIGH, point, true,
-            RotationUtil.AimType.REGULAR, ROTATE_SPEED)) {
-         return false;
-      }
-      return RotationUtil.isAimed(point, ROTATE_TOLERANCE);
-   }
-
-   private void releaseRotation() {
-      if (RotationUtil.isControlledBy(this)) {
-         RotationUtil.cleanup(this);
-      }
    }
 
    private static double hitReach() {
@@ -336,9 +285,6 @@ public class ShieldBreaker extends Module {
    }
 
    private Vec3d eyeLook() {
-      if (RotationUtil.hasSilentRotation()) {
-         return RotationUtil.getRotationVector(RotationUtil.getServerPitch(), RotationUtil.getServerYaw());
-      }
       return mc.player.getRotationVec(1.0F);
    }
 
@@ -349,70 +295,7 @@ public class ShieldBreaker extends Module {
       if (fireMode.is("Hold LMB") && !mc.options.attackKey.isPressed()) {
          return false;
       }
-      if (!CrosshairPin.take(this, hit)) {
-         return false;
-      }
-      mc.crosshairTarget = hit;
-      refreshBoundAttackKeyCode();
-      if (boundAttackKeyCode > 0) {
-         KeyBinding.setKeyPressed(boundAttackKey, true);
-         KeyBinding.onKeyPressed(boundAttackKey);
-      } else if (boundAttackKey != null) {
-         KeyBinding.onKeyPressed(boundAttackKey);
-      }
-      clickHeld = true;
-      clickReleaseAt = System.currentTimeMillis() + CLICK_HOLD_MIN + (long) (Math.random() * CLICK_HOLD_SPREAD);
-      lastAttackAge = mc.player.age;
-      return true;
-   }
-
-   private void refreshBoundAttackKeyCode() {
-      boundAttackKey = null;
-      boundAttackKeyCode = -1;
-      if (mc.options == null) {
-         return;
-      }
-      InputUtil.Key key = InputUtil.fromTranslationKey(mc.options.attackKey.getBoundKeyTranslationKey());
-      if (key == null || key.getCode() == InputUtil.UNKNOWN_KEY.getCode()) {
-         return;
-      }
-      boundAttackKey = key;
-      boundAttackKeyCode = key.getCode();
-   }
-
-   private void releaseClick() {
-      if (!clickHeld) {
-         return;
-      }
-      if (mc.options != null && boundAttackKeyCode > 0 && boundAttackKey != null) {
-         InputUtil.Key current = InputUtil.fromTranslationKey(mc.options.attackKey.getBoundKeyTranslationKey());
-         if (current != null && current.getCategory() == boundAttackKey.getCategory()
-               && current.getCode() == boundAttackKeyCode) {
-            if (!isPhysicallyPressed(boundAttackKey)) {
-               KeyBinding.setKeyPressed(boundAttackKey, false);
-            }
-         } else {
-            mc.options.attackKey.setPressed(false);
-         }
-      }
-      clickHeld = false;
-      CrosshairPin.clear(this);
-      boundAttackKeyCode = -1;
-      boundAttackKey = null;
-   }
-
-   private boolean isPhysicallyPressed(InputUtil.Key key) {
-      long handle = mc.getWindow() != null ? mc.getWindow().getHandle() : 0L;
-      if (handle == 0L) {
-         return false;
-      }
-      if (key.getCategory() == InputUtil.Type.MOUSE) {
-         return GLFW.glfwGetMouseButton(handle, key.getCode()) == GLFW.GLFW_PRESS;
-      }
-      if (key.getCategory() == InputUtil.Type.KEYSYM) {
-         return mc.getWindow() != null && InputUtil.isKeyPressed(mc.getWindow(), key.getCode());
-      }
-      return false;
+      return this.hit.press(hit);
    }
 
    private int findAxeSlot() {
@@ -424,26 +307,12 @@ public class ShieldBreaker extends Module {
       return -1;
    }
 
-   private void selectSlot(int slot) {
-      if (mc.player == null || mc.player.getInventory() == null) {
-         return;
-      }
-      mc.player.getInventory().setSelectedSlot(slot);
-   }
-
    private void restoreSlot() {
-      this.swapAge = -1;
-      if (prevSlot < 0 || mc.player == null || mc.player.getInventory() == null) {
-         return;
+      if (switchBack.get()) {
+         this.slots.restore();
+      } else {
+         this.slots.reset();
       }
-      if (!switchBack.get()) {
-         prevSlot = -1;
-         return;
-      }
-      if (mc.player.getInventory().getSelectedSlot() != prevSlot) {
-         selectSlot(prevSlot);
-      }
-      prevSlot = -1;
    }
 
    private boolean isFriend(PlayerEntity player) {

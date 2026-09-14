@@ -1,7 +1,6 @@
 package sl.selene.util.render.core;
 
 import com.mojang.blaze3d.opengl.GlStateManager;
-import java.awt.Color;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -1269,23 +1268,6 @@ public final class Renderer2D {
          return (color >> 24 & 0xFF) / 255.0F;
       }
 
-      public static Color injectAlpha(Color color, int alpha) {
-         return new Color(color.getRed(), color.getGreen(), color.getBlue(), alpha);
-      }
-
-      public static Color TwoColoreffect(Color color, Color color2, double n) {
-         float clamp = MathHelper.clamp((float) Math.sin((Math.PI * 6) * (n / 4.0 % 1.0)) / 2.0F + 0.5F, 0.0F, 1.0F);
-         return new Color(
-               MathHelper.lerp(color.getRed() / 255.0F, color2.getRed() / 255.0F, clamp),
-               MathHelper.lerp(color.getGreen() / 255.0F, color2.getGreen() / 255.0F, clamp),
-               MathHelper.lerp(color.getBlue() / 255.0F, color2.getBlue() / 255.0F, clamp),
-               MathHelper.lerp(color.getAlpha() / 255.0F, color2.getAlpha() / 255.0F, clamp));
-      }
-
-      public static Color setAlpha(Color c, int alpha) {
-         return new Color(c.getRed(), c.getGreen(), c.getBlue(), alpha);
-      }
-
       public static int setAlpha(int color, int alpha) {
          return color & 16777215 | alpha << 24;
       }
@@ -1322,63 +1304,14 @@ public final class Renderer2D {
          return TEXT2;
       }
 
-      public Color interpolate(Color color1, Color color2, double amount) {
-         amount = 1.0 - amount;
-         amount = (float) MathHelper.clamp(amount, 0.0, 1.0);
-         return new Color(
-               Interpolator.lerp(color1.getRed(), color2.getRed(), amount),
-               Interpolator.lerp(color1.getGreen(), color2.getGreen(), amount),
-               Interpolator.lerp(color1.getBlue(), color2.getBlue(), amount),
-               Interpolator.lerp(color1.getAlpha(), color2.getAlpha(), amount));
-      }
-
-      public static Color interpolateTwoColors(int speed, int index, Color start, Color end, boolean trueColor) {
-         int angle = 0;
-         if (speed == 0) {
-            angle = index % 360;
-         } else {
-            angle = (int) ((System.currentTimeMillis() / speed + index) % 360L);
-         }
-
-         angle = (angle >= 180 ? 360 - angle : angle) * 2;
-         return trueColor ? interpolateColorHue(start, end, angle / 360.0F)
-               : interpolateColorC(start, end, angle / 360.0F);
-      }
-
-      public static Color interpolateColorHue(Color color1, Color color2, float amount) {
-         amount = Math.min(1.0F, Math.max(0.0F, amount));
-         float[] color1HSB = Color.RGBtoHSB(color1.getRed(), color1.getGreen(), color1.getBlue(), null);
-         float[] color2HSB = Color.RGBtoHSB(color2.getRed(), color2.getGreen(), color2.getBlue(), null);
-         Color resultColor = Color.getHSBColor(
-               MathHelper.lerp(color1HSB[0], color2HSB[0], amount),
-               MathHelper.lerp(color1HSB[1], color2HSB[1], amount),
-               MathHelper.lerp(color1HSB[2], color2HSB[2], amount));
-         return new Color(
-               resultColor.getRed(),
-               resultColor.getGreen(),
-               resultColor.getBlue(),
-               (int) MathHelper.lerp((float) color1.getAlpha(), (float) color2.getAlpha(), amount));
-      }
-
-      public static Color interpolateColorC(Color color1, Color color2, float amount) {
-         return new Color(
-               MathHelper.lerp((float) color1.getRed(), (float) color2.getRed(), amount),
-               MathHelper.lerp((float) color1.getGreen(), (float) color2.getGreen(), amount),
-               MathHelper.lerp((float) color1.getBlue(), (float) color2.getBlue(), amount),
-               MathHelper.lerp((float) color1.getAlpha(), (float) color2.getAlpha(), amount));
-      }
-
       public static int gradient2(int color1, int color2, int speed, int index) {
-         Color col1 = new Color(color1);
-         Color col2 = new Color(color2);
          double angle = (System.currentTimeMillis() / speed + index) % 360L;
          double var13;
          float ratio = (float) ((var13 = angle % 360.0) / 360.0);
-         int red = (int) (col1.getRed() * (1.0F - ratio) + col2.getRed() * ratio);
-         int green = (int) (col1.getGreen() * (1.0F - ratio) + col2.getGreen() * ratio);
-         int blue = (int) (col1.getBlue() * (1.0F - ratio) + col2.getBlue() * ratio);
-         Color interpolatedColor = new Color(red, green, blue);
-         return interpolatedColor.getRGB();
+         int red = (int) ((color1 >> 16 & 0xFF) * (1.0F - ratio) + (color2 >> 16 & 0xFF) * ratio);
+         int green = (int) ((color1 >> 8 & 0xFF) * (1.0F - ratio) + (color2 >> 8 & 0xFF) * ratio);
+         int blue = (int) ((color1 & 0xFF) * (1.0F - ratio) + (color2 & 0xFF) * ratio);
+         return 0xFF000000 | red << 16 | green << 8 | blue;
       }
 
       public static int interpolate(int color1, int color2, double amount) {
@@ -1406,7 +1339,7 @@ public final class Renderer2D {
       public static int rainbow(int speed, int index, float saturation, float brightness, float opacity) {
          int angle = (int) ((System.currentTimeMillis() / speed + index) % 360L);
          float hue = angle / 360.0F;
-         int color = Color.HSBtoRGB(hue, saturation, brightness);
+         int color = sl.selene.util.color.ColorUtil.hsbToRgb(hue, saturation, brightness);
          return getColor(red(color), green(color), blue(color), Math.max(0, Math.min(255, (int) (opacity * 255.0F))));
       }
 
@@ -1440,10 +1373,9 @@ public final class Renderer2D {
       public static int skyRainbow(int speed, int index) {
          double angle = (int) ((System.currentTimeMillis() / speed + index) % 360L);
          double var4;
-         return Color
-               .getHSBColor((var4 = angle % 360.0) / 360.0 < 0.5 ? -((float) (var4 / 360.0)) : (float) (var4 / 360.0),
-                     0.5F, 1.0F)
-               .hashCode();
+         return sl.selene.util.color.ColorUtil
+               .hsbToRgb((var4 = angle % 360.0) / 360.0 < 0.5 ? -((float) (var4 / 360.0)) : (float) (var4 / 360.0),
+                     0.5F, 1.0F);
       }
 
       public static int[] getAstolfoColor(int speed) {
@@ -1483,11 +1415,6 @@ public final class Renderer2D {
          return n >> 24 & 0xFF;
       }
 
-      public static float[] getColorComps(Color color) {
-         return new float[] { color.getRed() / 255.0F, color.getGreen() / 255.0F, color.getBlue() / 255.0F,
-               color.getAlpha() / 255.0F };
-      }
-
       public static int getClientColorOne(int speed, int index) {
          return ACCENT;
       }
@@ -1497,14 +1424,6 @@ public final class Renderer2D {
          int f1 = color >> 8 & 0xFF;
          int f2 = color & 0xFF;
          return getColor(f, f1, f2, (int) alpha);
-      }
-
-      public static Color getColor(int color) {
-         int r = color >> 16 & 0xFF;
-         int g = color >> 8 & 0xFF;
-         int b = color & 0xFF;
-         int a = color >> 24 & 0xFF;
-         return new Color(r, g, b, a);
       }
 
       public static int replAlpha(int c, int a) {
@@ -1532,7 +1451,7 @@ public final class Renderer2D {
       }
 
       public static int getColor(float r, float g, float b, float a) {
-         return new Color((int) r, (int) g, (int) b, (int) a).getRGB();
+         return (int) a << 24 | (int) r << 16 | (int) g << 8 | (int) b;
       }
 
       public static int getColor(int red, int green, int blue) {
@@ -1569,14 +1488,6 @@ public final class Renderer2D {
       }
 
       public static int rgba(int r, int g, int b, int a) {
-         return a << 24 | r << 16 | g << 8 | b;
-      }
-
-      public static int colorToHex(Color color) {
-         int a = color.getAlpha();
-         int r = color.getRed();
-         int g = color.getGreen();
-         int b = color.getBlue();
          return a << 24 | r << 16 | g << 8 | b;
       }
 

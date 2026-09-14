@@ -13,6 +13,7 @@ import sl.selene.util.render.math.animation.impl.EaseInOutQuad;
 public class ModeSetting extends Setting {
    public final List<String> modes;
    public String currentMode;
+   public final String defaultMode;
    public String description;
    public Animation animation = new EaseInOutQuad(300, 1.0);
    public int index;
@@ -23,6 +24,7 @@ public class ModeSetting extends Setting {
       this.modes = Arrays.asList(options);
       this.index = this.modes.indexOf(currentMode);
       this.currentMode = this.modes.get(this.index);
+      this.defaultMode = this.currentMode;
    }
 
    public String get() {
@@ -31,6 +33,11 @@ public class ModeSetting extends Setting {
 
    public boolean is(String mode) {
       return this.currentMode.equalsIgnoreCase(mode);
+   }
+
+   public void reset() {
+      this.index = this.modes.indexOf(this.defaultMode);
+      this.currentMode = this.modes.get(this.index);
    }
 
    public ModeSetting hidden(Supplier<Boolean> hidden) {

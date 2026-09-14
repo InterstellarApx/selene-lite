@@ -9,12 +9,14 @@ import sl.selene.util.render.animation.util.Animation;
 @Environment(EnvType.CLIENT)
 public class BooleanSetting extends Setting {
    private boolean state;
+   private final boolean defaultValue;
    public String description;
    public Animation anim = new Animation();
 
    public BooleanSetting(String name, boolean state) {
       this.name = name;
       this.state = state;
+      this.defaultValue = state;
       this.description = this.description;
    }
 
@@ -24,6 +26,10 @@ public class BooleanSetting extends Setting {
 
    public void set(boolean state) {
       this.state = state;
+   }
+
+   public void reset() {
+      this.state = this.defaultValue;
    }
 
    public BooleanSetting hidden(Supplier<Boolean> hidden) {

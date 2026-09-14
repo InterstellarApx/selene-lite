@@ -97,6 +97,8 @@ public final class Config implements ConfigUpdater {
                EventManager.unregister(module);
             }
 
+            module.resetToDefaults();
+
             if (module.isEnabledByDefault()) {
                module.setState(true);
             }
@@ -104,7 +106,10 @@ public final class Config implements ConfigUpdater {
 
          for (Module module : Selene.get.manager.module) {
             if (modulesObject.has(module.name)) {
-               module.load(modulesObject.getAsJsonObject(module.name));
+               try {
+                  module.load(modulesObject.getAsJsonObject(module.name));
+               } catch (RuntimeException ignored) {
+               }
             }
          }
       }

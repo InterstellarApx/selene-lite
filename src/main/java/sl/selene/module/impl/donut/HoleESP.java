@@ -1,4 +1,4 @@
-package sl.selene.module.impl.visuals;
+package sl.selene.module.impl.donut;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;

@@ -1,6 +1,5 @@
 package sl.selene.ui.gui.component.render;
 
-import java.awt.Desktop;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -344,13 +343,6 @@ public final class GuiRenderConfigPanel extends GuiScreen {
       try {
          if (!folder.exists()) {
             folder.mkdirs();
-         }
-         if (Desktop.isDesktopSupported()) {
-            Desktop desktop = Desktop.getDesktop();
-            if (desktop.isSupported(Desktop.Action.OPEN)) {
-               desktop.open(folder);
-               opened = true;
-            }
          }
       } catch (Exception ignored) {
       }

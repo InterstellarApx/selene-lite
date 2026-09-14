@@ -1,5 +1,6 @@
 package sl.selene.module.api;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import java.util.ArrayList;
 import net.fabricmc.api.EnvType;
@@ -32,6 +33,7 @@ public class Module extends Config {
    public static MinecraftClient mc = MinecraftClient.getInstance();
    public String name;
    public int bind;
+   public int defaultBind;
    public boolean enable;
    public boolean open = false;
    public Category category;
@@ -73,6 +75,7 @@ public class Module extends Config {
          this.bind = this.module.bind();
       }
 
+      this.defaultBind = this.bind;
       this.enable = false;
       this.description = this.module.description();
       this.displayName = this.name;
@@ -142,6 +145,19 @@ public class Module extends Config {
       }
    }
 
+   public void resetToDefaults() {
+      this.bind = this.defaultBind;
+
+      for (Setting set : this.getSettings()) {
+         if (set != null) {
+            try {
+               set.reset();
+            } catch (RuntimeException ignored) {
+            }
+         }
+      }
+   }
+
    public JsonObject save() {
       JsonObject object = new JsonObject();
       object.addProperty("enable", this.enable);
@@ -180,72 +196,150 @@ public class Module extends Config {
          }
       }
 
+      for (Setting set : this.getSettings()) {
+         if (set instanceof ListSetting) {
+            propertiesObject.addProperty(set.name, String.join(",", ((ListSetting)set).selected));
+         }
+      }
+
       object.add("Settings", propertiesObject);
       return object;
    }
 
    public void load(JsonObject object) {
       if (object != null) {
-         if (object.has("enable")) {
-            this.setState(object.get("enable").getAsBoolean());
-         }
+         JsonElement settingsElement = object.get("Settings");
+         if (settingsElement != null && settingsElement.isJsonObject()) {
+            JsonObject propertiesObject = settingsElement.getAsJsonObject();
 
-         if (object.has("keyIndex")) {
-            this.bind = object.get("keyIndex").getAsInt();
-         }
+            for (Setting set : this.getSettings()) {
+               if (set == null) {
+                  continue;
+               }
 
-         for (Setting set : this.getSettings()) {
-            JsonObject propertiesObject = object.getAsJsonObject("Settings");
-            if (set != null && propertiesObject != null && propertiesObject.has(set.name)) {
-               if (set instanceof BooleanSetting) {
-                  ((BooleanSetting)set).set(propertiesObject.get(set.name).getAsBoolean());
-               } else if (set instanceof ModeSetting) {
-                  ((ModeSetting)set).currentMode = propertiesObject.get(set.name).getAsString();
-               } else if (set instanceof SliderSetting) {
-                  float sliderValue = propertiesObject.get(set.name).getAsFloat();
-                  ((SliderSetting)set).current = Math.max(((SliderSetting)set).minimum,
-                        Math.min(((SliderSetting)set).maximum, sliderValue));
-               } else if (set instanceof BindSettings) {
-                  ((BindSettings)set).key = propertiesObject.get(set.name).getAsInt();
-               } else if (set instanceof StringSetting) {
-                  ((StringSetting)set).input = propertiesObject.get(set.name).getAsString();
-               } else if (set instanceof HueSetting hueSetting) {
-                  if (propertiesObject.get(set.name).isJsonObject()) {
-                     JsonObject colorObject = propertiesObject.getAsJsonObject(set.name);
-                     if (colorObject.has("hue")) {
-                        hueSetting.current = colorObject.get("hue").getAsFloat();
-                     }
-                     if (colorObject.has("saturation")) {
-                        hueSetting.saturation = colorObject.get("saturation").getAsFloat();
-                     }
-                     if (colorObject.has("brightness")) {
-                        hueSetting.brightness = colorObject.get("brightness").getAsFloat();
-                     }
-                  } else {
-                     hueSetting.current = propertiesObject.get(set.name).getAsFloat();
-                  }
-               } else if (set instanceof MultiBooleanSetting) {
-                  if (propertiesObject.get(set.name).isJsonObject()) {
-                     JsonObject multiBoolObject = propertiesObject.getAsJsonObject(set.name);
-
-                     for (BooleanSetting boolSetting : ((MultiBooleanSetting)set).settings) {
-                        if (multiBoolObject.has(boolSetting.name)) {
-                           boolSetting.set(multiBoolObject.get(boolSetting.name).getAsBoolean());
-                        }
-                     }
-                  }
-               } else if (set instanceof ListSetting) {
-                  String[] split = propertiesObject.get(set.name).getAsString().split(",");
-                  ((ListSetting)set).selected = new ArrayList<>();
-
-                  for (String s : split) {
-                     if (((ListSetting)set).list.contains(s)) {
-                        ((ListSetting)set).selected.add(s);
-                     }
-                  }
+               try {
+                  this.loadSetting(set, propertiesObject);
+               } catch (RuntimeException ignored) {
                }
             }
          }
+
+         try {
+            if (object.has("keyIndex")) {
+               this.bind = object.get("keyIndex").getAsInt();
+            }
+         } catch (RuntimeException ignored) {
+         }
+
+         try {
+            if (object.has("enable")) {
+               this.setState(object.get("enable").getAsBoolean());
+            }
+         } catch (RuntimeException ignored) {
+         }
+      }
+   }
+
+   private void loadSetting(Setting set, JsonObject propertiesObject) {
+      JsonElement value = propertiesObject.get(set.name);
+      if (value == null || value.isJsonNull()) {
+         return;
+      }
+
+      if (set instanceof BooleanSetting boolSetting) {
+         if (value.isJsonPrimitive()) {
+            boolSetting.set(value.getAsBoolean());
+         }
+      } else if (set instanceof ModeSetting modeSetting) {
+         if (value.isJsonPrimitive()) {
+            String stored = value.getAsString();
+            int modeIndex = modeSetting.modes.indexOf(stored);
+
+            if (modeIndex < 0) {
+               for (int i = 0; i < modeSetting.modes.size(); i++) {
+                  if (modeSetting.modes.get(i).equalsIgnoreCase(stored)) {
+                     modeIndex = i;
+                     break;
+                  }
+               }
+            }
+
+            if (modeIndex >= 0) {
+               modeSetting.currentMode = modeSetting.modes.get(modeIndex);
+               modeSetting.index = modeIndex;
+            }
+         }
+      } else if (set instanceof SliderSetting sliderSetting) {
+         if (value.isJsonPrimitive()) {
+            float sliderValue = value.getAsFloat();
+            sliderSetting.current = Math.max(sliderSetting.minimum,
+                  Math.min(sliderSetting.maximum, sliderValue));
+         }
+      } else if (set instanceof BindSettings bindSetting) {
+         if (value.isJsonPrimitive()) {
+            bindSetting.key = value.getAsInt();
+         }
+      } else if (set instanceof StringSetting stringSetting) {
+         if (value.isJsonPrimitive()) {
+            stringSetting.input = value.getAsString();
+         }
+      } else if (set instanceof HueSetting hueSetting) {
+         if (value.isJsonObject()) {
+            JsonObject colorObject = value.getAsJsonObject();
+            JsonElement hue = colorObject.get("hue");
+            JsonElement saturation = colorObject.get("saturation");
+            JsonElement brightness = colorObject.get("brightness");
+
+            if (hue != null && hue.isJsonPrimitive()) {
+               hueSetting.current = hue.getAsFloat();
+            }
+
+            if (saturation != null && saturation.isJsonPrimitive()) {
+               hueSetting.saturation = saturation.getAsFloat();
+            }
+
+            if (brightness != null && brightness.isJsonPrimitive()) {
+               hueSetting.brightness = brightness.getAsFloat();
+            }
+         } else if (value.isJsonPrimitive()) {
+            hueSetting.current = value.getAsFloat();
+         }
+      } else if (set instanceof MultiBooleanSetting multiBooleanSetting) {
+         if (value.isJsonObject()) {
+            JsonObject multiBoolObject = value.getAsJsonObject();
+
+            for (BooleanSetting boolSetting : multiBooleanSetting.settings) {
+               JsonElement element = multiBoolObject.get(boolSetting.name);
+
+               if (element != null && element.isJsonPrimitive()) {
+                  boolSetting.set(element.getAsBoolean());
+               }
+            }
+         }
+      } else if (set instanceof ListSetting listSetting) {
+         ArrayList<String> selected = new ArrayList<>();
+
+         if (value.isJsonPrimitive()) {
+            String joined = value.getAsString();
+
+            if (!joined.isEmpty()) {
+               for (String element : joined.split(",")) {
+                  if (listSetting.list.contains(element)) {
+                     selected.add(element);
+                  }
+               }
+            }
+         } else if (value.isJsonArray()) {
+            for (JsonElement element : value.getAsJsonArray()) {
+               if (element.isJsonPrimitive() && listSetting.list.contains(element.getAsString())) {
+                  selected.add(element.getAsString());
+               }
+            }
+         } else {
+            return;
+         }
+
+         listSetting.selected = selected;
       }
    }
 

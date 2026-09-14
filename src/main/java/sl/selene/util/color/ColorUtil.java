@@ -1,6 +1,5 @@
 package sl.selene.util.color;
 
-import java.awt.Color;
 import lombok.Generated;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -77,7 +76,7 @@ public final class ColorUtil {
    public static int skyRainbow(int speed, int index) {
       double angle = (int)((System.currentTimeMillis() / speed + index) % 360L);
       double var4;
-      return Color.getHSBColor((var4 = angle % 360.0) / 360.0 < 0.5 ? -((float)(var4 / 360.0)) : (float)(var4 / 360.0), 0.5F, 1.0F).hashCode();
+      return hsbToRgb((var4 = angle % 360.0) / 360.0 < 0.5 ? -((float)(var4 / 360.0)) : (float)(var4 / 360.0), 0.5F, 1.0F);
    }
 
    public static int fadeBetween(float speed, int offset, int color1, int color2) {
@@ -281,7 +280,7 @@ public final class ColorUtil {
    public static int rainbow(int speed, int index, float saturation, float brightness, float opacity) {
       int angle = (int)((System.currentTimeMillis() / speed + index) % 360L);
       float hue = angle / 360.0F;
-      int color = Color.HSBtoRGB(hue, saturation, brightness);
+      int color = hsbToRgb(hue, saturation, brightness);
       return getColor(red(color), green(color), blue(color), Math.round(opacity * 255.0F));
    }
 
@@ -304,10 +303,100 @@ public final class ColorUtil {
       angle = (angle > 180 ? 360 - angle : angle) + 180;
       int color = interpolate(start, end, MathHelper.clamp(angle / 180.0F - 1.0F, 0.0F, 1.0F));
       float[] hs = rgba(color);
-      float[] hsb = Color.RGBtoHSB((int)(hs[0] * 255.0F), (int)(hs[1] * 255.0F), (int)(hs[2] * 255.0F), null);
+      float[] hsb = rgbToHsb((int)(hs[0] * 255.0F), (int)(hs[1] * 255.0F), (int)(hs[2] * 255.0F));
       hsb[1] *= 1.5F;
       hsb[1] = Math.min(hsb[1], 1.0F);
-      return Color.HSBtoRGB(hsb[0], hsb[1], hsb[2]);
+      return hsbToRgb(hsb[0], hsb[1], hsb[2]);
+   }
+
+   public static int hsbToRgb(float hue, float saturation, float brightness) {
+      int r = 0;
+      int g = 0;
+      int b = 0;
+      if (saturation == 0.0F) {
+         r = (int)(brightness * 255.0F + 0.5F);
+         g = r;
+         b = r;
+      } else {
+         float scaled = (hue - (float)Math.floor(hue)) * 6.0F;
+         float fraction = scaled - (float)Math.floor(scaled);
+         float p = brightness * (1.0F - saturation);
+         float q = brightness * (1.0F - saturation * fraction);
+         float t = brightness * (1.0F - saturation * (1.0F - fraction));
+         switch ((int)scaled) {
+            case 0 -> {
+               r = (int)(brightness * 255.0F + 0.5F);
+               g = (int)(t * 255.0F + 0.5F);
+               b = (int)(p * 255.0F + 0.5F);
+            }
+            case 1 -> {
+               r = (int)(q * 255.0F + 0.5F);
+               g = (int)(brightness * 255.0F + 0.5F);
+               b = (int)(p * 255.0F + 0.5F);
+            }
+            case 2 -> {
+               r = (int)(p * 255.0F + 0.5F);
+               g = (int)(brightness * 255.0F + 0.5F);
+               b = (int)(t * 255.0F + 0.5F);
+            }
+            case 3 -> {
+               r = (int)(p * 255.0F + 0.5F);
+               g = (int)(q * 255.0F + 0.5F);
+               b = (int)(brightness * 255.0F + 0.5F);
+            }
+            case 4 -> {
+               r = (int)(t * 255.0F + 0.5F);
+               g = (int)(p * 255.0F + 0.5F);
+               b = (int)(brightness * 255.0F + 0.5F);
+            }
+            case 5 -> {
+               r = (int)(brightness * 255.0F + 0.5F);
+               g = (int)(p * 255.0F + 0.5F);
+               b = (int)(q * 255.0F + 0.5F);
+            }
+         }
+      }
+
+      return 0xFF000000 | r << 16 | g << 8 | b;
+   }
+
+   public static float[] rgbToHsb(int red, int green, int blue) {
+      float[] hsb = new float[3];
+      int cmax = Math.max(red, green);
+      if (blue > cmax) {
+         cmax = blue;
+      }
+
+      int cmin = Math.min(red, green);
+      if (blue < cmin) {
+         cmin = blue;
+      }
+
+      float brightness = (float)cmax / 255.0F;
+      float saturation = cmax == 0 ? 0.0F : (float)(cmax - cmin) / (float)cmax;
+      float hue = 0.0F;
+      if (saturation != 0.0F) {
+         float cr = (float)(cmax - red) / (float)(cmax - cmin);
+         float cg = (float)(cmax - green) / (float)(cmax - cmin);
+         float cb = (float)(cmax - blue) / (float)(cmax - cmin);
+         if (red == cmax) {
+            hue = cb - cg;
+         } else if (green == cmax) {
+            hue = 2.0F + cr - cb;
+         } else {
+            hue = 4.0F + cg - cr;
+         }
+
+         hue /= 6.0F;
+         if (hue < 0.0F) {
+            hue += 1.0F;
+         }
+      }
+
+      hsb[0] = hue;
+      hsb[1] = saturation;
+      hsb[2] = brightness;
+      return hsb;
    }
 
    public static int getColor(int red, int green, int blue, int alpha) {

@@ -17,6 +17,7 @@ import sl.selene.module.api.setting.Setting;
 import sl.selene.module.api.setting.impl.BooleanSetting;
 import sl.selene.module.api.setting.impl.ModeSetting;
 import sl.selene.module.api.setting.impl.SliderSetting;
+import sl.selene.util.engine.TargetEngine;
 import sl.selene.util.player.AimAssistEngine;
 
 @IModule(
@@ -54,6 +55,7 @@ public class AimAssist extends Module {
    private final AimAssistEngine engine = new AimAssistEngine();
 
    private Entity currentTarget;
+   private final TargetEngine targets = new TargetEngine();
 
    public AimAssist() {
       this.addSettings(new Setting[] {
@@ -128,36 +130,19 @@ public class AimAssist extends Module {
    }
 
    private Entity findBestTarget() {
-      Entity best = null;
-      double bestScore = Double.MAX_VALUE;
-      double rangeSq = (double) range.get() * range.get();
-      float maxFov = fov.get();
-
-      for (Entity entity : mc.world.getEntities()) {
-         if (!isValidTarget(entity)) {
-            continue;
-         }
-         Vec3d aim = CombatUtil.aimPoint((LivingEntity) entity, aimPoint.get());
-         double distanceSq = mc.player.getEyePos().squaredDistanceTo(aim);
-         if (distanceSq > rangeSq) {
-            continue;
-         }
-         float[] rotation = CombatUtil.rotationTo(mc, aim);
-
-         float yawDiff = MathHelper.wrapDegrees(rotation[0] - mc.player.getYaw());
-         float pitchDiff = rotation[1] - mc.player.getPitch();
-         if (maxFov < 180.0F
-               && (Math.abs(yawDiff) > maxFov / 2.0F || Math.abs(pitchDiff) > maxFov / 2.0F)) {
-            continue;
-         }
-         double offAngle = Math.sqrt(yawDiff * yawDiff + pitchDiff * pitchDiff);
-         double score = Math.sqrt(distanceSq) + offAngle * 2.0;
-         if (score < bestScore) {
-            bestScore = score;
-            best = entity;
-         }
-      }
-      return best;
+      TargetEngine.Query q = this.targets.query();
+      q.range = range.get();
+      q.fov = fov.get();
+      q.throughWalls = true;
+      q.noInvisible = false;
+      q.ignoreFriends = false;
+      q.noTameable = false;
+      q.teamsProtect = teams.get();
+      q.targetMode = targetMode.get();
+      q.pointMode = aimPoint.get();
+      q.sort = "Distance";
+      q.preferAirborne = false;
+      return this.targets.findBest();
    }
 
    private boolean withinRange(Entity entity) {

@@ -1,6 +1,5 @@
 package sl.selene.ui.gui.component.setting;
 
-import java.awt.Color;
 import java.util.HashMap;
 import java.util.List;
 import net.fabricmc.api.EnvType;
@@ -327,7 +326,7 @@ public class GuiRenderSetting {
          float colorWidth = 40.0F;
          float colorX = x + width - colorWidth - 2.0F;
          renderer2D.text(FontRegistry.INTER_MEDIUM, x, y + 1.0F + 7.0F, 13.0F, setting.name, mainColor40);
-         Color hueColor = hueSetting.getColor();
+         int hueColor = hueSetting.getColor();
          GlassStyle.outline(renderer2D, colorX - 10.0F, y, 46.48F, 10.075F, 3.0F, mainAlpha);
          renderer2D.rect(colorX - 10.0F, y, 46.48F, 10.075F, 3.0F, mainColor6);
          renderer2D.rect(
@@ -339,9 +338,9 @@ public class GuiRenderSetting {
             3.0F,
             3.0F,
             0.0F,
-            Renderer2D.ColorUtil.replAlpha(hueColor.getRGB(), (int)(255.0F * mainAlpha))
+            Renderer2D.ColorUtil.replAlpha(hueColor, (int)(255.0F * mainAlpha))
          );
-         String hexText = String.format("#%02X%02X%02X", hueColor.getRed(), hueColor.getGreen(), hueColor.getBlue());
+         String hexText = String.format("#%02X%02X%02X", hueColor >> 16 & 0xFF, hueColor >> 8 & 0xFF, hueColor & 0xFF);
          renderer2D.text(
             FontRegistry.INTER_MEDIUM,
             colorX + colorWidth / 2.0F - renderer2D.measureText(FontRegistry.INTER_MEDIUM, hexText, 12.0F).width / 2.0F - 14.0F,

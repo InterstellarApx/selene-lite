@@ -8,4 +8,7 @@ import net.fabricmc.api.Environment;
 public class Setting extends Config {
    public String name;
    public Supplier<Boolean> hidden = () -> false;
+
+   public void reset() {
+   }
 }

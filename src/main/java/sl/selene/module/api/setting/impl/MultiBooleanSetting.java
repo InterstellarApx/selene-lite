@@ -26,6 +26,12 @@ public class MultiBooleanSetting extends Setting {
       return false;
    }
 
+   public void reset() {
+      for (BooleanSetting setting : this.settings) {
+         setting.reset();
+      }
+   }
+
    public MultiBooleanSetting hidden(Supplier<Boolean> hidden) {
       this.hidden = hidden;
       return this;

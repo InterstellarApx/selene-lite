@@ -3,9 +3,6 @@ package sl.selene.module.impl.combat;
 import java.util.Optional;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.util.InputUtil;
-import org.lwjgl.glfw.GLFW;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.Tameable;
@@ -18,6 +15,7 @@ import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
+import sl.selene.Selene;
 import sl.selene.event.EventInit;
 import sl.selene.event.impl.EventChangeWorld;
 import sl.selene.event.lifecycle.ClientTickEvent;
@@ -28,7 +26,7 @@ import sl.selene.module.api.setting.Setting;
 import sl.selene.module.api.setting.impl.BooleanSetting;
 import sl.selene.module.api.setting.impl.ModeSetting;
 import sl.selene.module.api.setting.impl.SliderSetting;
-import sl.selene.util.player.CrosshairPin;
+import sl.selene.util.engine.HitEngine;
 
 @IModule(
    name = "TriggerBot",
@@ -62,24 +60,27 @@ public class TriggerBot extends Module {
    public static BooleanSetting noShields = new BooleanSetting("No Shields", true);
    public static ModeSetting fireMode = new ModeSetting("Fire Mode", "Always", "Always", "Hold LMB");
 
-   private static final double CAST_PADDING = 0.2;
+   public static ModeSetting targetMode2 = new ModeSetting("Targeting", "Crosshair", "Crosshair", "Raycast");
 
-   private static final long CLICK_HOLD_MIN = 30L;
-   private static final long CLICK_HOLD_SPREAD = 55L;
+   public static BooleanSetting pauseOnUse = new BooleanSetting("Pause On Use", true);
+
+   public static SliderSetting minInterval = new SliderSetting("Min Interval (ms)", 0.0F, 0.0F, 500.0F, 5.0F, false);
+
+   public static BooleanSetting antiBot = new BooleanSetting("Anti Bot", true);
+
+   private static final double CAST_PADDING = 0.2;
 
    private long armedAt = -1L;
    private long swingAt = -1L;
-   private int lastAttackAge = Integer.MIN_VALUE;
+   private long lastAttackMs = 0L;
 
-   private boolean clickHeld;
-   private long clickReleaseAt;
-   private int boundAttackKeyCode = -1;
-   private InputUtil.Key boundAttackKey;
+   private final HitEngine hit = new HitEngine();
 
    public TriggerBot() {
       this.addSettings(new Setting[] {
          reach, reachVariance, reaction, reactionVariance, cooldownPercent, targetMode, weaponMode,
-         hurtTime, teams, crits, noInvisible, noCrystals, noShields, fireMode
+         hurtTime, teams, crits, noInvisible, noCrystals, noShields, fireMode,
+         targetMode2, pauseOnUse, minInterval, antiBot
       });
    }
 
@@ -91,13 +92,13 @@ public class TriggerBot extends Module {
    @Override
    public void onDisable() {
       super.onDisable();
-      releaseClick();
+      hit.release();
       disarm();
    }
 
    @EventInit
    public void onWorldChange(EventChangeWorld event) {
-      releaseClick();
+      hit.release();
       disarm();
    }
 
@@ -106,14 +107,18 @@ public class TriggerBot extends Module {
       if (mc.player == null || mc.world == null || mc.interactionManager == null) {
          return;
       }
-      if (mc.currentScreen != null || mc.player.isUsingItem()) {
-         releaseClick();         disarm();
+      if (mc.currentScreen != null) {
+         hit.release();
+         disarm();
          return;
       }
-      if (clickHeld) {
-         if (System.currentTimeMillis() >= clickReleaseAt) {
-            releaseClick();
-         }
+      if (pauseOnUse.get() && mc.player.isUsingItem() && !mc.player.isBlocking()) {
+         hit.release();
+         disarm();
+         return;
+      }
+      if (hit.isHeld()) {
+         hit.tick();
          disarm();
          return;
       }
@@ -128,15 +133,20 @@ public class TriggerBot extends Module {
       }
 
       if (!mc.player.isOnGround() && !mc.player.isClimbing()) {
-         if (crits.get() && !canLandCrit()) {
-            disarm();
+         if (crits.get() && !(CombatUtil.canCrit(mc) && mc.player.getVelocity().y < -0.08D
+               && mc.player.fallDistance >= 0.15F)) {
+            if (armedAt < 0L) {
+               long warm = System.currentTimeMillis();
+               armedAt = warm;
+               swingAt = warm + rollReaction();
+            }
             return;
          }
-         this.trySwing(this.raycastTarget(this.rollReach()));
+         this.trySwing(resolveHit());
          return;
       }
 
-      EntityHitResult hit = raycastTarget(rollReach());
+      EntityHitResult hit = resolveHit();
       if (hit == null) {
          disarm();
          return;
@@ -144,8 +154,19 @@ public class TriggerBot extends Module {
       this.trySwing(hit);
    }
 
+   private EntityHitResult resolveHit() {
+      if (targetMode2.is("Crosshair")) {
+         if (mc.crosshairTarget instanceof EntityHitResult entityHit
+               && isValidTarget(entityHit.getEntity())) {
+            return entityHit;
+         }
+         return null;
+      }
+      return raycastTarget(rollReach());
+   }
+
    private boolean trySwing(EntityHitResult hit) {
-      if (hit == null) {
+      if (hit == null || mc.player == null) {
          return false;
       }
       if (hurtTime.get() && hit.getEntity() instanceof LivingEntity living && living.hurtTime > 0) {
@@ -159,14 +180,20 @@ public class TriggerBot extends Module {
       if (now < swingAt) {
          return false;
       }
+      if (minInterval.get() > 0.0F && now - lastAttackMs < (long) minInterval.get()) {
+         return false;
+      }
       float required = Math.max(0.5F, Math.min(1.0F, cooldownPercent.get() / 100.0F));
       if (mc.player.getAttackCooldownProgress(0.5F) < required) {
          return false;
       }
-      if (mc.player.age == lastAttackAge) {
+      if (mc.player.age == this.hit.getLastAttackAge()) {
          return false;
       }
-      click(hit);
+      if (!click(hit)) {
+         return false;
+      }
+      lastAttackMs = now;
       return true;
    }
 
@@ -182,33 +209,10 @@ public class TriggerBot extends Module {
       return Math.max(0L, (long) roll);
    }
 
-   private long rollClickHold() {
-      return CLICK_HOLD_MIN + (long) (Math.random() * CLICK_HOLD_SPREAD);
-   }
-
-   private void refreshBoundAttackKey() {
-      boundAttackKey = null;
-      boundAttackKeyCode = -1;
-      if (mc.options == null) {
-         return;
-      }
-      InputUtil.Key key = InputUtil.fromTranslationKey(mc.options.attackKey.getBoundKeyTranslationKey());
-      if (key == null || key.getCode() == InputUtil.UNKNOWN_KEY.getCode()) {
-         return;
-      }
-      boundAttackKey = key;
-      boundAttackKeyCode = key.getCode();
-   }
-
-   private boolean canLandCrit() {
-      return mc.player.fallDistance > 0.0F
-            && mc.player.getAttackCooldownProgress(0.5F) > 0.9F
-            && !mc.player.isTouchingWater()
-            && !mc.player.hasStatusEffect(net.minecraft.entity.effect.StatusEffects.BLINDNESS)
-            && !mc.player.hasVehicle();
-   }
-
    private EntityHitResult raycastTarget(double reach) {
+      if (mc.player == null || mc.world == null) {
+         return null;
+      }
       Vec3d eye = mc.player.getEyePos();
       Vec3d look = mc.player.getRotationVec(1.0F);
       double length = reach + CAST_PADDING;
@@ -245,7 +249,7 @@ public class TriggerBot extends Module {
    }
 
    private boolean isValidTarget(Entity entity) {
-      if (entity == null || entity == mc.player || entity == mc.getCameraEntity()) {
+      if (entity == null || mc.player == null || entity == mc.player || entity == mc.getCameraEntity()) {
          return false;
       }
       if (entity instanceof EndCrystalEntity) {
@@ -275,69 +279,31 @@ public class TriggerBot extends Module {
       if (noShields.get() && living instanceof PlayerEntity blocking && blocking.isBlocking()) {
          return false;
       }
+      if (antiBot.get() && AntiBot.isBot(living)) {
+         return false;
+      }
+      if (living instanceof PlayerEntity player && Selene.get != null
+            && Selene.get.friendManager != null
+            && Selene.get.friendManager.isFriend(player.getName().getString())) {
+         return false;
+      }
       return true;
    }
 
-   private void click(EntityHitResult hit) {
+   private boolean click(EntityHitResult hit) {
       if (mc.options == null) {
          disarm();
-         return;
+         return false;
       }
       if (!fireMode.is("Hold LMB") && mc.options.attackKey.isPressed()) {
          disarm();
-         return;
-      }
-      if (!CrosshairPin.set(this, hit)) {
-         disarm();
-         return;
-      }
-      mc.crosshairTarget = hit;
-      refreshBoundAttackKey();
-      if (boundAttackKeyCode > 0) {
-         KeyBinding.setKeyPressed(boundAttackKey, true);
-         KeyBinding.onKeyPressed(boundAttackKey);
-      } else if (boundAttackKey != null) {
-         KeyBinding.onKeyPressed(boundAttackKey);
-      }
-      clickHeld = true;
-      clickReleaseAt = System.currentTimeMillis() + rollClickHold();
-      lastAttackAge = mc.player.age;
-      disarm();
-   }
-
-   private void releaseClick() {
-      if (!clickHeld) {
-         return;
-      }
-      if (mc.options != null && boundAttackKeyCode > 0 && boundAttackKey != null) {
-         InputUtil.Key current = InputUtil.fromTranslationKey(mc.options.attackKey.getBoundKeyTranslationKey());
-         if (current != null && current.getCategory() == boundAttackKey.getCategory()
-               && current.getCode() == boundAttackKeyCode) {
-            if (!isPhysicallyPressed(boundAttackKey)) {
-               KeyBinding.setKeyPressed(boundAttackKey, false);
-            }
-         } else {
-            mc.options.attackKey.setPressed(false);
-         }
-      }
-      clickHeld = false;
-      CrosshairPin.clear(this);
-      boundAttackKeyCode = -1;
-      boundAttackKey = null;
-   }
-
-   private boolean isPhysicallyPressed(InputUtil.Key key) {
-      long handle = mc.getWindow() != null ? mc.getWindow().getHandle() : 0L;
-      if (handle == 0L) {
          return false;
       }
-      if (key.getCategory() == InputUtil.Type.MOUSE) {
-         return GLFW.glfwGetMouseButton(handle, key.getCode()) == GLFW.GLFW_PRESS;
+      boolean pressed = this.hit.press(hit);
+      if (pressed) {
+         disarm();
       }
-      if (key.getCategory() == InputUtil.Type.KEYSYM) {
-         return mc.getWindow() != null && InputUtil.isKeyPressed(mc.getWindow(), key.getCode());
-      }
-      return false;
+      return pressed;
    }
 
    private void disarm() {

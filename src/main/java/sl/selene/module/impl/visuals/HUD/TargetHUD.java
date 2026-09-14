@@ -1,7 +1,6 @@
 package sl.selene.module.impl.visuals.HUD;
 
 import com.mojang.blaze3d.opengl.GlStateManager;
-import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
 import net.fabricmc.api.EnvType;
@@ -133,7 +132,7 @@ public class TargetHUD {
       }
 
       if (animatedAbsorptionWidth > 0.0F) {
-         r2.rect(x + 74.0F, y + 48.0F, animatedAbsorptionWidth, 5.0F, 4.0F, new Color(16767232).getRGB());
+         r2.rect(x + 74.0F, y + 48.0F, animatedAbsorptionWidth, 5.0F, 4.0F, 0xFFFFD900);
       }
 
       r2.popAlpha();

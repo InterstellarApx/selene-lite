@@ -14,11 +14,17 @@ public class ListSetting extends Setting {
    public boolean opened;
    public String description;
    public List<String> selected = new ArrayList<>();
+   private final List<String> defaultSelected = new ArrayList<>();
 
    public ListSetting(String name, String... settings) {
       this.name = name;
       this.list = Arrays.asList(settings);
+      this.defaultSelected.addAll(this.selected);
       this.description = this.description;
+   }
+
+   public void reset() {
+      this.selected = new ArrayList<>(this.defaultSelected);
    }
 
    public ListSetting hidden(Supplier<Boolean> hidden) {

@@ -1,16 +1,19 @@
 package sl.selene.module.api.setting.impl;
 
-import java.awt.Color;
 import java.util.function.Supplier;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import sl.selene.module.api.setting.Setting;
+import sl.selene.util.color.ColorUtil;
 import sl.selene.util.render.math.animation.Animation;
 import sl.selene.util.render.math.animation.impl.EaseInOutQuad;
 
 @Environment(EnvType.CLIENT)
 public class HueSetting extends Setting {
    public float current;
+   public float defaultValue;
+   public float defaultSaturation = 1.0F;
+   public float defaultBrightness = 1.0F;
    public float minimum;
    public float maximum;
    public float increment;
@@ -25,6 +28,7 @@ public class HueSetting extends Setting {
       this.name = name;
       this.minimum = 0.0F;
       this.current = current;
+      this.defaultValue = current;
       this.maximum = 106.0F;
       this.increment = 1.0F;
       this.saturation = 1.0F;
@@ -35,10 +39,19 @@ public class HueSetting extends Setting {
       this.name = name;
       this.minimum = 0.0F;
       this.current = current;
+      this.defaultValue = current;
       this.maximum = 106.0F;
       this.increment = 1.0F;
       this.saturation = saturation;
+      this.defaultSaturation = saturation;
       this.brightness = brightness;
+      this.defaultBrightness = brightness;
+   }
+
+   public void reset() {
+      this.current = Math.max(this.minimum, Math.min(this.maximum, this.defaultValue));
+      this.saturation = this.defaultSaturation;
+      this.brightness = this.defaultBrightness;
    }
 
    public HueSetting hidden(Supplier<Boolean> hidden) {
@@ -46,16 +59,8 @@ public class HueSetting extends Setting {
       return this;
    }
 
-   public Color getColor() {
-      float hue = this.current / this.maximum;
-      return Color.getHSBColor(hue, this.saturation, this.brightness);
-   }
-
-   public void setColor(Color color) {
-      float[] hsb = Color.RGBtoHSB(color.getRed(), color.getGreen(), color.getBlue(), null);
-      this.current = hsb[0] * this.maximum;
-      this.saturation = hsb[1];
-      this.brightness = hsb[2];
+   public int getColor() {
+      return ColorUtil.hsbToRgb(this.current / this.maximum, this.saturation, this.brightness);
    }
 
    public float getHue() {
@@ -63,11 +68,10 @@ public class HueSetting extends Setting {
    }
 
    public int getRGB() {
-      return this.getColor().getRGB();
+      return this.getColor();
    }
 
    public int getRGBA(int alpha) {
-      Color color = this.getColor();
-      return alpha << 24 | color.getRed() << 16 | color.getGreen() << 8 | color.getBlue();
+      return alpha << 24 | this.getColor() & 0xFFFFFF;
    }
 }

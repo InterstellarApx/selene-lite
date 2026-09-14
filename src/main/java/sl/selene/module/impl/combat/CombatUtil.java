@@ -9,6 +9,9 @@ import net.minecraft.entity.decoration.ArmorStandEntity;
 import net.minecraft.entity.mob.Monster;
 import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.consume.UseAction;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
@@ -184,5 +187,41 @@ public final class CombatUtil {
 
    public static float random(float min, float max) {
       return min + (float) Math.random() * (max - min);
+   }
+
+   public static boolean canCrit(MinecraftClient mc) {
+      if (mc.player == null || mc.world == null) {
+         return false;
+      }
+      if (mc.player.fallDistance <= 0.0F || mc.player.isOnGround()) {
+         return false;
+      }
+      if (mc.player.isClimbing() || mc.player.isTouchingWater() || mc.player.isSwimming()) {
+         return false;
+      }
+      if (mc.player.isInLava() || mc.player.hasVehicle()) {
+         return false;
+      }
+      if (mc.player.getAbilities().flying) {
+         return false;
+      }
+      if (mc.player.hasStatusEffect(StatusEffects.BLINDNESS)
+            || mc.player.hasStatusEffect(StatusEffects.LEVITATION)
+            || mc.player.hasStatusEffect(StatusEffects.SLOW_FALLING)) {
+         return false;
+      }
+      return mc.player.getAttackCooldownProgress(0.5F) > 0.9F;
+   }
+
+   public static boolean isEating(MinecraftClient mc) {
+      if (mc.player == null || !mc.player.isUsingItem()) {
+         return false;
+      }
+      ItemStack active = mc.player.getActiveItem();
+      if (active == null || active.isEmpty()) {
+         return false;
+      }
+      UseAction action = active.getItem().getUseAction(active);
+      return action == UseAction.EAT || action == UseAction.DRINK;
    }
 }

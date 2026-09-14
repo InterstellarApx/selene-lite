@@ -1,6 +1,5 @@
 package sl.selene.module.impl.visuals.HUD;
 
-import java.awt.Color;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
@@ -53,7 +52,7 @@ public class InformationHUD {
 
    public static void information(Renderer2D r2) {
       Hud.animC.update();
-      Color mainColorGlow = Renderer2D.ColorUtil.getColor(Renderer2D.ColorUtil.replAlpha(Renderer2D.ColorUtil.getMainColor(1, 1), 50));
+      int mainColorGlow = Renderer2D.ColorUtil.replAlpha(Renderer2D.ColorUtil.getMainColor(1, 1), 50);
       ScaledResolution sr = new ScaledResolution(mc);
       boolean chat = mc.currentScreen instanceof ChatScreen;
       Hud.animC.run(chat ? 1.0 : 0.0, 0.8F, Easings.CIRC_OUT, false);
@@ -137,7 +136,7 @@ public class InformationHUD {
       float textY = y + 25.0F;
 
       Hud.drawClientRect(r2, x, y, iconSquare, iconSquare, 13.0F, 1.0F, 1.0F);
-      r2.shadow(x + 15.0F, y + 22.0F, 0.1F, 0.1F, 8.0F, 10.0F, 0.1F, mainColorGlow.getRGB());
+      r2.shadow(x + 15.0F, y + 22.0F, 0.1F, 0.1F, 8.0F, 10.0F, 0.1F, mainColorGlow);
       UiIcons.info(r2, x + 20.32F, cy, 18.0F, 1.0F);
 
       Hud.drawClientRect(r2, cx, y, contentWidth, iconSquare, 13.0F, 1.0F, 1.0F);

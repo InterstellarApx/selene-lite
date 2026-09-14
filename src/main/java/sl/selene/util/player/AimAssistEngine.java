@@ -15,11 +15,15 @@ public final class AimAssistEngine implements IMinecraft {
    private long lastFrameNanos;
    private double wobblePhase = Math.random() * Math.PI * 2.0;
    private double wobbleFreq = 1.6 + Math.random() * 1.4;
+   private double carryYaw;
+   private double carryPitch;
 
    public void reset() {
       lastFrameNanos = 0L;
       wobblePhase = Math.random() * Math.PI * 2.0;
       wobbleFreq = 1.6 + Math.random() * 1.4;
+      carryYaw = 0.0D;
+      carryPitch = 0.0D;
    }
 
    public void aim(Vec3d aim, float turnSpeed, float speed, float smoothness, float wobble,
@@ -90,8 +94,15 @@ public final class AimAssistEngine implements IMinecraft {
       double d = sens * 0.6D + 0.2D;
       double cube = d * d * d;
       double perCount = cube * 0.15D * (mc.options.getPerspective().isFirstPerson() ? 1.0D : 8.0D);
-      long yawCounts = perCount > 1.0E-9D ? Math.round((double) yawStep / perCount) : 0L;
-      long pitchCounts = perCount > 1.0E-9D ? Math.round((double) pitchStep / perCount) : 0L;
+      if (perCount <= 1.0E-9D) {
+         return;
+      }
+      double rawYaw = (double) yawStep / perCount + carryYaw;
+      double rawPitch = (double) pitchStep / perCount + carryPitch;
+      long yawCounts = Math.round(rawYaw);
+      long pitchCounts = Math.round(rawPitch);
+      carryYaw = MathHelper.clamp(rawYaw - (double) yawCounts, -1.5D, 1.5D);
+      carryPitch = MathHelper.clamp(rawPitch - (double) pitchCounts, -1.5D, 1.5D);
       if (yawCounts == 0L && pitchCounts == 0L) {
          return;
       }

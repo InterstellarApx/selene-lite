@@ -9,12 +9,14 @@ import sl.selene.util.keyboard.Keyboard;
 @Environment(EnvType.CLIENT)
 public class BindSettings extends Setting {
    public int key;
+   public final int defaultKey;
    public String description;
    public boolean active;
 
    public BindSettings(String name, int key) {
       this.name = name;
       this.key = key;
+      this.defaultKey = key;
       this.description = this.description;
    }
 
@@ -24,6 +26,10 @@ public class BindSettings extends Setting {
 
    public void set(int key) {
       this.key = key;
+   }
+
+   public void reset() {
+      this.key = this.defaultKey;
    }
 
    public BindSettings hidden(Supplier<Boolean> hidden) {

@@ -1,6 +1,5 @@
 package sl.selene.ui.gui.component.render;
 
-import java.awt.Color;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import sl.selene.module.api.setting.impl.HueSetting;
@@ -59,7 +58,7 @@ public class GuiRenderColorPicker extends GuiScreen {
       renderSaturationBrightnessPalette(renderer2D, paletteX, paletteY, paletteWidth, paletteHeight, hue);
       float cursorX = paletteX + setting.saturation * paletteWidth;
       float cursorY = paletteY + (1.0F - setting.brightness) * paletteHeight;
-      renderer2D.rect(cursorX - 2.5F, cursorY - 2.5F, 5.0F, 5.0F, 3.0F, new Color(255, 255, 255, 255).getRGB());
+      renderer2D.rect(cursorX - 2.5F, cursorY - 2.5F, 5.0F, 5.0F, 3.0F, 0xFFFFFFFF);
       float hueSliderWidth = 64.0F;
       float hueSliderHeight = 2.59F;
       float hueSliderX = x + 5.0F + (30.0F - 30.0F * GuiScreen.animation15.getOutput());
@@ -67,26 +66,26 @@ public class GuiRenderColorPicker extends GuiScreen {
       renderer2D.rectOutline(hueSliderX, hueSliderY, hueSliderWidth, hueSliderHeight, 2.0F, outlineColor, 0.5F);
       renderHueSlider(renderer2D, hueSliderX, hueSliderY, hueSliderWidth, hueSliderHeight);
       float hueSliderPos = hueSliderX + setting.current / 106.0F * hueSliderWidth;
-      renderer2D.rect(hueSliderPos - 3.0F, hueSliderY, 4.7F, 4.7F, 2.0F, new Color(255, 255, 255, 255).getRGB());
+      renderer2D.rect(hueSliderPos - 3.0F, hueSliderY, 4.7F, 4.7F, 2.0F, 0xFFFFFFFF);
    }
 
    private static void renderSaturationBrightnessPalette(Renderer2D renderer2D, float x, float y, float width, float height, float hue) {
-      Color baseColor = Color.getHSBColor(hue, 1.0F, 1.0F);
-      renderer2D.horizontalGradient(x, y, width, height, new Color(255, 255, 255).getRGB(), baseColor.getRGB());
-      renderer2D.verticalGradient(x, y, width, height, new Color(0, 0, 0, 0).getRGB(), new Color(0, 0, 0, 255).getRGB());
+      int baseColor = ColorUtil.hsbToRgb(hue, 1.0F, 1.0F);
+      renderer2D.horizontalGradient(x, y, width, height, 0xFFFFFFFF, baseColor);
+      renderer2D.verticalGradient(x, y, width, height, 0, 0xFF000000);
    }
 
    private static void renderHueSlider(Renderer2D renderer2D, float x, float y, float width, float height) {
       int segments = 6;
       float segmentWidth = width / segments;
-      Color[] hueColors = new Color[]{
-         Color.getHSBColor(0.0F, 1.0F, 1.0F),
-         Color.getHSBColor(0.16666667F, 1.0F, 1.0F),
-         Color.getHSBColor(0.33333334F, 1.0F, 1.0F),
-         Color.getHSBColor(0.5F, 1.0F, 1.0F),
-         Color.getHSBColor(0.6666667F, 1.0F, 1.0F),
-         Color.getHSBColor(0.8333333F, 1.0F, 1.0F),
-         Color.getHSBColor(1.0F, 1.0F, 1.0F)
+      int[] hueColors = new int[]{
+         ColorUtil.hsbToRgb(0.0F, 1.0F, 1.0F),
+         ColorUtil.hsbToRgb(0.16666667F, 1.0F, 1.0F),
+         ColorUtil.hsbToRgb(0.33333334F, 1.0F, 1.0F),
+         ColorUtil.hsbToRgb(0.5F, 1.0F, 1.0F),
+         ColorUtil.hsbToRgb(0.6666667F, 1.0F, 1.0F),
+         ColorUtil.hsbToRgb(0.8333333F, 1.0F, 1.0F),
+         ColorUtil.hsbToRgb(1.0F, 1.0F, 1.0F)
       };
 
       for (int i = 0; i < segments; i++) {
@@ -96,8 +95,8 @@ public class GuiRenderColorPicker extends GuiScreen {
             y + 1.0F,
             segmentWidth,
             height,
-            ColorUtil.multAlpha(hueColors[i].getRGB(), GuiScreen.animation15.getOutput()),
-            ColorUtil.multAlpha(hueColors[i + 1].getRGB(), GuiScreen.animation15.getOutput())
+            ColorUtil.multAlpha(hueColors[i], GuiScreen.animation15.getOutput()),
+            ColorUtil.multAlpha(hueColors[i + 1], GuiScreen.animation15.getOutput())
          );
       }
    }

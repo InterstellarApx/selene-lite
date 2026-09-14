@@ -1,9 +1,9 @@
 package sl.selene.ui.gui.widget.settings;
 
-import java.awt.Color;
 import java.util.Objects;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import sl.selene.util.color.ColorUtil;
 
 @Environment(EnvType.CLIENT)
 public final class HSBColor {
@@ -32,7 +32,7 @@ public final class HSBColor {
       int g = rgba >>> 8 & 0xFF;
       int b = rgba & 0xFF;
       int a = rgba >>> 24 & 0xFF;
-      float[] hsb = Color.RGBtoHSB(r, g, b, null);
+      float[] hsb = ColorUtil.rgbToHsb(r, g, b);
       return new HSBColor(hsb[0] * 360.0F, hsb[1], hsb[2], a / 255.0F);
    }
 
@@ -73,13 +73,8 @@ public final class HSBColor {
    }
 
    public int toRgba() {
-      float h = this.hue / 360.0F;
-      Color color = Color.getHSBColor(h, this.saturation, this.brightness);
-      int r = color.getRed();
-      int g = color.getGreen();
-      int b = color.getBlue();
-      int a = Math.round(this.alpha * 255.0F);
-      return a << 24 | r << 16 | g << 8 | b;
+      int rgb = ColorUtil.hsbToRgb(this.hue / 360.0F, this.saturation, this.brightness);
+      return Math.round(this.alpha * 255.0F) << 24 | rgb & 0xFFFFFF;
    }
 
    @Override

@@ -71,6 +71,11 @@ public class WTap extends Module {
          if (pendingDelay > 0) {
             return;
          }
+         double vx = mc.player.getVelocity().x;
+         double vz = mc.player.getVelocity().z;
+         if (vx * vx + vz * vz <= 0.0025D) {
+            return;
+         }
          wasHeld = mc.options.forwardKey.isPressed();
          if (wasHeld) {
             mc.options.forwardKey.setPressed(false);

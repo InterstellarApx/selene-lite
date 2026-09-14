@@ -15,6 +15,7 @@ import sl.selene.module.api.setting.impl.BooleanSetting;
 import sl.selene.module.api.setting.impl.SliderSetting;
 import sl.selene.module.impl.visuals.HUD.HudEditor;
 import sl.selene.module.impl.visuals.HUD.KeystrokesHUD;
+import sl.selene.event.player.AttackEvent;
 import sl.selene.util.render.animation.util.Animation;
 import sl.selene.util.render.animation.util.Easings;
 
@@ -78,8 +79,22 @@ public class Keystrokes extends Module {
       updateKeyAnim(sAnim, isBackPressed());
       updateKeyAnim(dAnim, isRightPressed());
       updateKeyAnim(spaceAnim, isSpacePressed());
-      updateKeyAnim(lmbAnim, GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS);
+      updateKeyAnim(lmbAnim, GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS
+            || mc.options.attackKey.isPressed());
       updateKeyAnim(rmbAnim, GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_RIGHT) == GLFW.GLFW_PRESS);
+   }
+
+   @EventInit
+   public void onAttack(AttackEvent event) {
+      if (!this.enable || mc.player == null || mc.getWindow() == null) {
+         return;
+      }
+      long window = mc.getWindow().getHandle();
+      boolean physical = GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
+      if (!physical) {
+         leftClicks++;
+         lmbAnim.set(1.0);
+      }
    }
 
    @EventInit

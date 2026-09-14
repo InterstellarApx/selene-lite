@@ -8,6 +8,7 @@ import sl.selene.module.api.setting.Setting;
 @Environment(EnvType.CLIENT)
 public class SliderSetting extends Setting {
    public float current;
+   public float defaultValue;
    public float minimum;
    public float maximum;
    public float increment;
@@ -20,6 +21,7 @@ public class SliderSetting extends Setting {
       this.name = name;
       this.minimum = minimum;
       this.current = current;
+      this.defaultValue = current;
       this.maximum = maximum;
       this.increment = increment;
       this.description = this.description;
@@ -28,6 +30,10 @@ public class SliderSetting extends Setting {
 
    public float get() {
       return this.current;
+   }
+
+   public void reset() {
+      this.current = Math.max(this.minimum, Math.min(this.maximum, this.defaultValue));
    }
 
    public SliderSetting hidden(Supplier<Boolean> hidden) {

@@ -5,6 +5,7 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import sl.selene.Selene;
 import sl.selene.module.impl.combat.AimAssist;
+import sl.selene.module.impl.combat.AntiBot;
 import sl.selene.module.impl.combat.ShieldBreaker;
 import sl.selene.module.impl.combat.TriggerBot;
 import sl.selene.module.impl.movement.STap;
@@ -12,11 +13,7 @@ import sl.selene.module.impl.movement.SnapTap;
 import sl.selene.module.impl.movement.ToggleSprint;
 import sl.selene.module.impl.movement.WTap;
 import sl.selene.module.impl.visuals.AspectRation;
-import sl.selene.module.impl.visuals.AmethystESP;
 import sl.selene.module.impl.visuals.BossBarRemover;
-import sl.selene.module.impl.visuals.ChunkFinder;
-import sl.selene.module.impl.visuals.HoleESP;
-import sl.selene.module.impl.visuals.StorageESP;
 import sl.selene.module.impl.visuals.ESP;
 import sl.selene.module.impl.visuals.Hud;
 import sl.selene.module.impl.visuals.Keystrokes;
@@ -30,8 +27,12 @@ import sl.selene.module.impl.visuals.FullBright;
 import sl.selene.module.impl.visuals.Projectile;
 import sl.selene.module.impl.utils.Optimizer;
 import sl.selene.module.impl.utils.Zoom;
+import sl.selene.module.impl.donut.AmethystESP;
+import sl.selene.module.impl.donut.ChunkFinder;
 import sl.selene.module.impl.donut.Freecam;
+import sl.selene.module.impl.donut.HoleESP;
 import sl.selene.module.impl.donut.NameHider;
+import sl.selene.module.impl.donut.StorageESP;
 
 @Environment(EnvType.CLIENT)
 public class Manager {
@@ -39,6 +40,7 @@ public class Manager {
 
    public Manager() {
       this.module.add(new AimAssist());
+      this.module.add(new AntiBot());
       this.module.add(new TriggerBot());
       this.module.add(new ShieldBreaker());
       this.module.add(new ToggleSprint());
