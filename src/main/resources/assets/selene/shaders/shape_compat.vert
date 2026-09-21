@@ -33,6 +33,7 @@ out vec2 vPosPx;
 void main() {
     vec2 size = vec2(inRect.z, inRect.w);
     vec2 local = inLocal;
+    local += (local * 2.0 - 1.0) * 2.0 / max(abs(size), vec2(1.0));
     vSize = size;
     vLocalPx = local * size;
 

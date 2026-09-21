@@ -29,28 +29,17 @@ float rdist(vec2 pos, vec2 size, vec4 radius) {
     return min(max(v.x, v.y), 0.0) + length(max(v, 0.0)) - cornerRadius;
 }
 
-float ralpha(vec2 size, vec2 coord, vec4 radius, float smoothness) {
-    vec2 center = size * 0.5;
-    float feather = max(smoothness, 0.001);
-    float dist = rdist(center - coord * size, max(center - 1.0, vec2(0.0)), max(radius, vec4(0.0)));
-    return 1.0 - smoothstep(1.0 - feather, 1.0, dist);
+const float EDGE_SOFTNESS = 2.0;
+
+float coverage(float d, float px) {
+    float t = clamp(0.5 - 0.5 * d / (EDGE_SOFTNESS * px), 0.0, 1.0);
+    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
 }
 
-float outlineAlpha(vec2 coord, vec2 size, vec4 radius, float thickness, float smoothness) {
-    float outer = ralpha(size, coord, radius, smoothness);
-    vec2 innerSize = size - vec2(thickness * 2.0);
-    if (innerSize.x <= 0.0 || innerSize.y <= 0.0) {
-        return outer;
-    }
-
-    vec2 local = coord * size;
-    vec2 innerCoord = (local - vec2(thickness)) / innerSize;
-    vec4 innerRadius = max(radius - vec4(thickness), vec4(0.0));
-    float inner = ralpha(innerSize, innerCoord, innerRadius, smoothness);
-    return clamp(outer - inner, 0.0, 1.0);
+float pixelSize(vec2 localPx) {
+    return max(0.5 * (length(dFdx(localPx)) + length(dFdy(localPx))), 1e-4);
 }
 
-    
 vec2 sdfNormal(vec2 p, vec2 halfSize, vec4 radius) {
     float eps = 1.0;
     vec2 g = vec2(
@@ -61,6 +50,7 @@ vec2 sdfNormal(vec2 p, vec2 halfSize, vec4 radius) {
 }
 
 void main() {
+    float px = pixelSize(vLocalPx);
     if (uScissorEnabled > 0.5) {
         if (vPosPx.x < uScissor.x || vPosPx.y < uScissor.y
             || vPosPx.x > uScissor.z || vPosPx.y > uScissor.w) {
@@ -68,20 +58,22 @@ void main() {
         }
     }
 
-    vec2 coord = clamp(vLocalPx / vSize, vec2(0.0), vec2(1.0));
     vec2 size = max(vSize, vec2(1.0));
     float thickness = max(vFlags.z, 0.0);
-    float smoothness = 0.5;
     float globalAlpha = clamp(vAlphaPowerMix.x, 0.0, 1.0);
     float baseAlpha = clamp(vAlphaPowerMix.z, 0.0, 1.0);
     float fresnelMix = clamp(vAlphaPowerMix.w, 0.0, 1.0);
 
-    float alpha = outlineAlpha(coord, size, vRadii, thickness, smoothness);
-
-    vec2 center = size * 0.5;
-    vec2 halfSize = max(center - 1.0, vec2(0.0));
-    vec2 pos = center - coord * size;
-    vec2 normal = sdfNormal(pos, halfSize, vRadii);
+    vec2 halfSize = size * 0.5;
+    vec2 pos = halfSize - vLocalPx;
+    vec4 radii = max(vRadii, vec4(0.0));
+    float alpha = coverage(rdist(pos, halfSize, radii), px);
+    vec2 halfInner = halfSize - vec2(thickness);
+    if (halfInner.x > 0.0 && halfInner.y > 0.0) {
+        alpha -= coverage(rdist(pos, halfInner, max(radii - vec4(thickness), vec4(0.0))), px);
+    }
+    alpha = clamp(alpha, 0.0, 1.0);
+    vec2 normal = sdfNormal(pos, halfSize, radii);
 
     
     vec2 uv = clamp(vPosPx * uBlurScale + uBlurOffset, 0.0, 1.0);

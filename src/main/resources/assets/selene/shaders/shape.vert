@@ -56,6 +56,7 @@ void main(){
     InstanceData inst = instances[iid];
 
     vec2 local = QUAD[vid];
+    local += (local * 2.0 - 1.0) * 2.0 / max(abs(inst.size), vec2(1.0));
     vSize = inst.size;
     vLocalPx = local * inst.size;
 

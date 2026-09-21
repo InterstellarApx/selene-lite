@@ -120,6 +120,8 @@ public interface RenderBackend {
 
    int createMsdfTexture(int width, int height, ByteBuffer data);
 
+   int createImageTexture(int width, int height, ByteBuffer data);
+
    int createAlphaTexture(int width, int height);
 
    void uploadAlphaSubImage(int tex, int x, int y, int w, int h, ByteBuffer data);

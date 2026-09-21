@@ -26,7 +26,8 @@ const vec2 QUAD[6] = vec2[6](
 void main() {
     vec2 size = aRect.zw;
     vSize = size;
-    vLocalPx = aLocal * size;
+    vec2 local = aLocal + (aLocal * 2.0 - 1.0) * 2.0 / max(abs(size), vec2(1.0));
+    vLocalPx = local * size;
     vPosPx = aRect.xy + vLocalPx;
     vRadii = aRadii;
     vAlphaPowerMix = aAlphaPowerMix;

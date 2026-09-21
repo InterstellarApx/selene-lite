@@ -75,6 +75,48 @@ public final class TextureLoader {
       }
    }
 
+   public static int loadDistanceField(String resourcePath, float range) {
+      if (backend == null) {
+         throw new IllegalStateException("TextureLoader.initialize() must be called first");
+      }
+
+      String cacheKey = "sdf:" + resourcePath;
+      Integer cached = textureCache.get(cacheKey);
+      if (cached != null) {
+         return cached;
+      }
+
+      int textureId = decodeDistanceField(resourcePath, range);
+      if (textureId > 0) {
+         textureCache.put(cacheKey, textureId);
+      }
+      return textureId;
+   }
+
+   private static int decodeDistanceField(String resourcePath, float range) {
+      try (MemoryStack stack = MemoryStack.stackPush()) {
+         IntBuffer w = stack.mallocInt(1);
+         IntBuffer h = stack.mallocInt(1);
+         IntBuffer comp = stack.mallocInt(1);
+         ByteBuffer image = STBImage.stbi_load_from_memory(ResourceUtils.readBinary(resourcePath), w, h, comp, 4);
+         if (image == null) {
+            System.err.println("Failed to decode texture: " + resourcePath + " - " + STBImage.stbi_failure_reason());
+            return 0;
+         }
+
+         try {
+            DistanceField.encodeFromAlpha(image, w.get(0), h.get(0), range);
+            return backend.createMsdfTexture(w.get(0), h.get(0), image);
+         } finally {
+            STBImage.stbi_image_free(image);
+         }
+      } catch (Exception exception) {
+         System.err.println("Failed to load distance field texture: " + resourcePath);
+         exception.printStackTrace();
+         return 0;
+      }
+   }
+
    private static int loadTexture(String resourcePath) {
       ByteBuffer imageBuffer;
       try {
@@ -103,7 +145,8 @@ public final class TextureLoader {
 
             width = w.get(0);
             int height = h.get(0);
-            int textureId = backend.createMsdfTexture(width, height, image);
+            bleedTransparentColor(image, width, height);
+            int textureId = backend.createImageTexture(width, height, image);
             STBImage.stbi_image_free(image);
             System.out.println("[TextureLoader] Loaded: " + resourcePath + " (" + width + "x" + height + ") -> ID " + textureId);
             var10 = textureId;
@@ -156,7 +199,8 @@ public final class TextureLoader {
             return 0;
          }
 
-         int textureId = backend.createMsdfTexture(w.get(0), h.get(0), image);
+         bleedTransparentColor(image, w.get(0), h.get(0));
+         int textureId = backend.createImageTexture(w.get(0), h.get(0), image);
          STBImage.stbi_image_free(image);
          return textureId;
       } catch (Throwable ignored) {
@@ -169,6 +213,77 @@ public final class TextureLoader {
    public static void releaseTexture(int textureId) {
       if (textureId > 0 && backend != null) {
          backend.destroyTexture(textureId);
+      }
+   }
+
+   private static void bleedTransparentColor(ByteBuffer image, int width, int height) {
+      int count = width * height;
+      if (count <= 0 || image.capacity() < count * 4) {
+         return;
+      }
+
+      boolean[] opaque = new boolean[count];
+      for (int i = 0; i < count; i++) {
+         opaque[i] = (image.get(i * 4 + 3) & 255) != 0;
+      }
+
+      boolean[] filled = opaque.clone();
+      for (int pass = 0; pass < 16; pass++) {
+         boolean changed = false;
+
+         for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+               int index = y * width + x;
+               if (opaque[index]) {
+                  continue;
+               }
+
+               int r = 0;
+               int g = 0;
+               int b = 0;
+               int n = 0;
+
+               for (int dy = -1; dy <= 1; dy++) {
+                  int ny = y + dy;
+                  if (ny < 0 || ny >= height) {
+                     continue;
+                  }
+
+                  for (int dx = -1; dx <= 1; dx++) {
+                     int nx = x + dx;
+                     if (nx < 0 || nx >= width) {
+                        continue;
+                     }
+
+                     int neighbour = ny * width + nx;
+                     if (!opaque[neighbour]) {
+                        continue;
+                     }
+
+                     r += image.get(neighbour * 4) & 255;
+                     g += image.get(neighbour * 4 + 1) & 255;
+                     b += image.get(neighbour * 4 + 2) & 255;
+                     n++;
+                  }
+               }
+
+               if (n == 0) {
+                  continue;
+               }
+
+               image.put(index * 4, (byte) (r / n));
+               image.put(index * 4 + 1, (byte) (g / n));
+               image.put(index * 4 + 2, (byte) (b / n));
+               filled[index] = true;
+               changed = true;
+            }
+         }
+
+         if (!changed) {
+            break;
+         }
+
+         System.arraycopy(filled, 0, opaque, 0, count);
       }
    }
 }

@@ -19,6 +19,8 @@ public final class SeleneIcons {
    private static final int COLS = 12;
    private static final int ATLAS_W = 1152;
    private static final int ATLAS_H = 768;
+   private static final float CELL_RANGE = 12.0F;
+   private static final float SINGLE_RANGE = 32.0F;
 
    private static final String[] NAMES = {
 
@@ -135,8 +137,9 @@ public final class SeleneIcons {
       float v1 = (row + 1) * CELL / (float) ATLAS_H;
 
       renderer.pushAlpha(clamp01(alpha));
-      renderer.drawRgbaTextureWithUV(
+      renderer.drawDistanceField(
          texture,
+         CELL_RANGE,
          centerX - size * 0.5F,
          centerY - size * 0.5F,
          size,
@@ -168,7 +171,7 @@ public final class SeleneIcons {
          return cached;
       }
 
-      int texture = TextureLoader.load("assets/selene/icons/categories/" + name + ".png");
+      int texture = TextureLoader.loadDistanceField("assets/selene/icons/categories/" + name + ".png", SINGLE_RANGE);
       CATEGORY_TEXTURES.put(key, texture);
       return texture;
    }
@@ -202,7 +205,7 @@ public final class SeleneIcons {
       if (cached != null) {
          return cached;
       }
-      int texture = TextureLoader.load("assets/selene/icons/" + name + ".png");
+      int texture = TextureLoader.loadDistanceField("assets/selene/icons/" + name + ".png", SINGLE_RANGE);
       CUSTOM_TEXTURES.put(name, texture);
       return texture;
    }
@@ -211,7 +214,8 @@ public final class SeleneIcons {
          int tintRgba) {
       renderer.pushAlpha(clamp01(alpha));
 
-      renderer.drawRgbaTexture(texture, centerX - size * 0.5F, centerY - size * 0.5F, size, size, tintRgba, false);
+      renderer.drawDistanceField(texture, SINGLE_RANGE, centerX - size * 0.5F, centerY - size * 0.5F, size, size,
+            0.0F, 0.0F, 1.0F, 1.0F, tintRgba);
       renderer.popAlpha();
    }
 
@@ -229,8 +233,9 @@ public final class SeleneIcons {
       float v0 = row * SEMANTIC_CELL / (float) SEMANTIC_ATLAS_H;
       float v1 = (row + 1) * SEMANTIC_CELL / (float) SEMANTIC_ATLAS_H;
       renderer.pushAlpha(clamp01(alpha));
-      renderer.drawRgbaTextureWithUV(
+      renderer.drawDistanceField(
          texture,
+         CELL_RANGE,
          centerX - size * 0.5F,
          centerY - size * 0.5F,
          size,
@@ -284,7 +289,7 @@ public final class SeleneIcons {
       if (cached > 0) {
          return cached;
       }
-      int loaded = TextureLoader.load(ATLAS_PATH);
+      int loaded = TextureLoader.loadDistanceField(ATLAS_PATH, CELL_RANGE);
       atlasTexture = loaded;
       return loaded;
    }
@@ -294,7 +299,7 @@ public final class SeleneIcons {
       if (cached > 0) {
          return cached;
       }
-      int loaded = TextureLoader.load(SEMANTIC_ATLAS_PATH);
+      int loaded = TextureLoader.loadDistanceField(SEMANTIC_ATLAS_PATH, CELL_RANGE);
       semanticAtlasTexture = loaded;
       return loaded;
    }

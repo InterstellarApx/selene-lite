@@ -537,6 +537,35 @@ public final class GlBackend implements RenderBackend {
    public void drawInstances(ByteBuffer data, int instanceCount) {
    }
 
+   private static void resetUnpackState() {
+      GL15.glBindBuffer(35052, 0);
+      GL11.glPixelStorei(3317, 1);
+      GL11.glPixelStorei(3315, 0);
+      GL11.glPixelStorei(3316, 0);
+   }
+
+   public int createImageTexture(int width, int height, ByteBuffer data) {
+      if (width <= 0 || height <= 0) {
+         throw new IllegalArgumentException("Invalid image texture dimensions: " + width + "x" + height);
+      } else if (data == null) {
+         throw new IllegalArgumentException("data");
+      } else {
+         int tex = GL11.glGenTextures();
+         GL11.glBindTexture(3553, tex);
+         GL11.glTexParameteri(3553, 10241, 9987);
+         GL11.glTexParameteri(3553, 10240, 9729);
+         GL11.glTexParameteri(3553, 10242, 33071);
+         GL11.glTexParameteri(3553, 10243, 33071);
+         resetUnpackState();
+         GL12.glPixelStorei(3314, 0);
+         data.rewind();
+         GL11.glTexImage2D(3553, 0, 32856, width, height, 0, 6408, 5121, data);
+         GL30.glGenerateMipmap(3553);
+         GL11.glBindTexture(3553, 0);
+         return tex;
+      }
+   }
+
    public int createMsdfTexture(int width, int height, ByteBuffer data) {
       if (width <= 0 || height <= 0) {
          throw new IllegalArgumentException("Invalid MSDF texture dimensions: " + width + "x" + height);
@@ -551,7 +580,7 @@ public final class GlBackend implements RenderBackend {
          GL12.glTexParameteri(3553, 33085, 0);
          GL11.glTexParameteri(3553, 10242, 33071);
          GL11.glTexParameteri(3553, 10243, 33071);
-         GL11.glPixelStorei(3317, 1);
+         resetUnpackState();
          GL12.glPixelStorei(3314, 0);
          data.rewind();
          GL11.glTexImage2D(3553, 0, 32856, width, height, 0, 6408, 5121, data);
@@ -573,7 +602,7 @@ public final class GlBackend implements RenderBackend {
       GL11.glTexParameteri(3553, 36419, 6403);
       GL11.glTexParameteri(3553, 36420, 6403);
       GL11.glTexParameteri(3553, 36421, 6403);
-      GL11.glPixelStorei(3317, 1);
+      resetUnpackState();
       GL12.glPixelStorei(3314, 0);
       GL11.glTexImage2D(3553, 0, 33321, width, height, 0, 6403, 5121, (ByteBuffer) null);
       GL11.glBindTexture(3553, 0);
@@ -585,7 +614,7 @@ public final class GlBackend implements RenderBackend {
       int prevRowLen = GL11.glGetInteger(3314);
       data.order(ByteOrder.nativeOrder());
       GL11.glBindTexture(3553, tex);
-      GL11.glPixelStorei(3317, 1);
+      resetUnpackState();
       GL12.glPixelStorei(3314, 0);
       GL11.glTexSubImage2D(3553, 0, x, y, w, h, 6403, 5121, data);
       GL12.glPixelStorei(3314, prevRowLen);
@@ -599,7 +628,7 @@ public final class GlBackend implements RenderBackend {
       int prevRowLen = GL11.glGetInteger(3314);
       data.order(ByteOrder.nativeOrder());
       GL11.glBindTexture(3553, tex);
-      GL11.glPixelStorei(3317, 1);
+      resetUnpackState();
       GL12.glPixelStorei(3314, sourceRowLength);
       GL11.glTexSubImage2D(3553, 0, x, y, w, h, 6403, 5121, data);
       GL12.glPixelStorei(3314, prevRowLen);
@@ -1023,6 +1052,7 @@ public final class GlBackend implements RenderBackend {
          GL11.glTexParameteri(3553, 10241, 9729);
          ByteBuffer px = org.lwjgl.BufferUtils.createByteBuffer(4);
          px.put((byte) 0).put((byte) 0).put((byte) 0).put((byte) 0).flip();
+         resetUnpackState();
          GL11.glTexImage2D(3553, 0, 6408, 1, 1, 0, 6408, 5121, px);
          GL11.glBindTexture(3553, 0);
          this.transparentPixelTex = tex;
@@ -1039,6 +1069,7 @@ public final class GlBackend implements RenderBackend {
       GL11.glTexParameteri(3553, 10241, 9729);
       ByteBuffer px = org.lwjgl.BufferUtils.createByteBuffer(3);
       px.put((byte) r).put((byte) g).put((byte) b).flip();
+      resetUnpackState();
       GL11.glTexImage2D(3553, 0, 6407, 1, 1, 0, 6407, 5121, px);
 
       GL11.glBindTexture(3553, 0);

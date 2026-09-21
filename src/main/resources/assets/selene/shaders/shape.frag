@@ -92,34 +92,30 @@ float sdRoundBox(vec2 p, vec2 halfSize, vec4 radii){
     return length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - radius;
 }
 
-float lengthNO(vec2 v, float n) {
-    v = abs(v);
-    return pow(pow(v.x, n) + pow(v.y, n), 1.0 / n);
-}
-
-float roundedBoxSDFO(vec2 p, vec2 halfSize, vec4 r, float n) {
-    n = max(n, 1.0);
-    float rad = (p.x >= 0.0)
-        ? ((p.y >= 0.0) ? r.x : r.y)
-        : ((p.y >= 0.0) ? r.w : r.z);
-
-    vec2 q = abs(p) - halfSize + rad;
-    vec2 qpos = max(q, 0.0);
-
-    float d = lengthNO(qpos, n) + min(max(q.x, q.y), 0.0) - rad;
-    return d;
-}
-
-
-float sdCircle(vec2 p, float r){
-    return length(p) - r;
-}
-
 float median(float r, float g, float b){
     return max(min(r, g), min(max(r, g), b));
 }
 
+const float EDGE_SOFTNESS = 2.0;
+const int GLYPH_TAPS = 4;
+const float GLYPH_GAMMA = 0.6;
+
+float coverage(float d, float px) {
+    float t = clamp(0.5 - 0.5 * d / (EDGE_SOFTNESS * px), 0.0, 1.0);
+    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+}
+
+float pixelSize(vec2 localPx) {
+    return max(0.5 * (length(dFdx(localPx)) + length(dFdy(localPx))), 1e-4);
+}
+
+float perceivedAlpha(float alpha, vec3 color){
+    float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    return mix(alpha, pow(alpha, GLYPH_GAMMA), smoothstep(0.3, 0.6, luma));
+}
+
 void main(){
+    float px = pixelSize(vLocalPx);
     uint mode = vFlags & 3u;
     float thickness = float((vFlags >> 2) & 0xFFu);
     float startRad = float((vFlags >> 10) & 0xFFu) / 255.0 * TAU;
@@ -154,8 +150,7 @@ void main(){
         vec2 clipCenter = vec2(float(vClip.x), float(vClip.y)) + clipHalf;
         vec2 clipLocal = vPosPx - clipCenter;
         float clipDistance = sdRoundBox(clipLocal, clipHalf, clipRadii);
-        float clipFeather = max(fwidth(clipDistance), 1e-3);
-        clipMask = 1.0 - smoothstep(0.0, clipFeather, clipDistance);
+        clipMask = clamp(0.5 - clipDistance, 0.0, 1.0);
         if (clipMask <= 0.0) {
             discard;
         }
@@ -220,51 +215,47 @@ void main(){
             float v = clamp(vPosPx.y * vUvScale.y + vUvOffset.y, 0.0, 1.0);
             sampleUv = vec2(u, v);
         } else {
-            sampleUv = vUV;
+            sampleUv = clamp(vUV, min(vUvScale, vUvOffset), max(vUvScale, vUvOffset));
         }
         vec4 tex = sampleTexture(vTexSlot, sampleUv);
 
         if (isMsdf) {
             float pxRange = max(cornerRadii.x, 1e-6);
-            vec2 atlasSize = vec2(textureDimensions(vTexSlot));
-            vec2 unitRange = vec2(pxRange) / max(atlasSize, vec2(1.0));
-            vec2 screenTexSize = vec2(1.0) / fwidth(vUV);
-            float screenPxRange = max(0.5 * dot(unitRange, screenTexSize), 1.0);
-            float dist = median(tex.r, tex.g, tex.b);
-            float pxDist = screenPxRange * (dist - 0.5);
-            float glyphOpacity = clamp(pxDist * 1.28 + 0.5, 0.0, 1.0);
-            float opacity;
-            if (isMsdfOutline) {
-                float outlineWidth = max(cornerRadii.y, 0.0);
-                float hollowOpacity = clamp((pxDist - outlineWidth) * 1.28 + 0.5, 0.0, 1.0);
-                opacity = max(glyphOpacity - hollowOpacity, 0.0);
-            } else {
-                opacity = glyphOpacity;
+            float outlineWidth = max(cornerRadii.y, 0.0);
+            vec2 stepX = dFdx(vUV);
+            vec2 stepY = dFdy(vUV);
+            vec2 unitRange = vec2(pxRange) / max(vec2(textureDimensions(vTexSlot)), vec2(1.0));
+            float screenPxRange = 0.5 * dot(unitRange, 1.0 / max(abs(stepX) + abs(stepY), vec2(1e-6)));
+            vec2 uvLo = min(vUvScale, vUvOffset);
+            vec2 uvHi = max(vUvScale, vUvOffset);
+
+            float sum = 0.0;
+            for (int ty = 0; ty < GLYPH_TAPS; ty++) {
+                for (int tx = 0; tx < GLYPH_TAPS; tx++) {
+                    vec2 offset = (vec2(tx, ty) + 0.5) / float(GLYPH_TAPS) - 0.5;
+                    vec2 tapUv = clamp(vUV + stepX * offset.x + stepY * offset.y, uvLo, uvHi);
+                    vec3 msdf = sampleTexture(vTexSlot, tapUv).rgb;
+                    float pxDist = (median(msdf.r, msdf.g, msdf.b) - 0.5) * screenPxRange;
+                    float tap = clamp(pxDist * float(GLYPH_TAPS) + 0.5, 0.0, 1.0);
+                    if (isMsdfOutline) {
+                        tap -= clamp((pxDist - outlineWidth) * float(GLYPH_TAPS) + 0.5, 0.0, 1.0);
+                    }
+                    sum += max(tap, 0.0);
+                }
             }
-            float alpha = col.a * opacity;
-            vec3 rgb = col.rgb * alpha;
+
+            float opacity = sum / float(GLYPH_TAPS * GLYPH_TAPS);
+            vec3 tone = clamp(col.rgb / max(col.a, 1e-4), 0.0, 1.0);
+            float alpha = col.a * perceivedAlpha(opacity, tone);
             if (alpha <= 0.001) discard;
-            FragColor = vec4(rgb, alpha);
+            FragColor = vec4(col.rgb * alpha, alpha);
             return;
         }
 
         bool isRGBA = ((vFlags >> 2) & 0x1u) == 1u;
         bool forceOpaque = ((vFlags >> 3) & 0x1u) == 1u;
 
-        vec2 dx = dFdx(vLocalPx);
-        vec2 dy = dFdy(vLocalPx);
-        float px = 0.5 * (length(dx) + length(dy)) + 1e-6;
-        vec2 offs[4] = vec2[4](
-            vec2(-0.33, -0.33), vec2(0.33, -0.33), vec2(0.33, 0.33), vec2(-0.33, 0.33)
-        );
-        float acc = 0.0;
-        for (int i = 0; i < 4; i++) {
-            vec2 ps = (vLocalPx + dx * offs[i].x + dy * offs[i].y) - (0.5 * vSize);
-            float dS = sdRoundBox(ps, 0.5 * vSize, cornerRadii);
-            float a = 1.0 - smoothstep(0.0, px, dS);
-            acc += a;
-        }
-        float mask = acc * 0.25;
+        float mask = coverage(sdRoundBox(p, halfSize, cornerRadii), px);
 
         vec4 sampled;
         if (isRGBA) {
@@ -284,88 +275,29 @@ void main(){
         FragColor = colTex;
         return;
     } else if (mode == 2u) {
-
-        vec2 dx = dFdx(vLocalPx);
-        vec2 dy = dFdy(vLocalPx);
-        float px = 0.5 * (length(dx) + length(dy)) + 1e-6;
-
-        vec2 offs[8] = vec2[8](
-            vec2(-0.25, -0.25), vec2(0.25, -0.25), vec2(0.25, 0.25), vec2(-0.25, 0.25),
-            vec2(-0.5, 0.0), vec2(0.5, 0.0), vec2(0.0, -0.5), vec2(0.0, 0.5)
-        );
-        float acc = 0.0;
         float radius = halfSize.x;
+        float dRing = length(p) - radius;
+        float shape = (thickness > 0.0) ? coverage(abs(dRing) - thickness, px) : coverage(dRing, px);
+
+        float sector = 1.0;
         float sectorWidth = arcPct * TAU;
-
-        float betterPx = max(px * 0.7, 0.5);
-
-        for (int i = 0; i < 8; i++) {
-            vec2 ps = p + dx * offs[i].x + dy * offs[i].y;
-            float dC = length(ps) - radius;
-            float aR = (thickness > 0.0)
-                ? (1.0 - smoothstep(thickness - betterPx, thickness + betterPx, abs(dC)))
-                : (1.0 - smoothstep(-betterPx, betterPx, dC));
-
-            float aA = 1.0;
-            if (sectorWidth < TAU - 1e-6) {
-                float ang = atan(ps.y, ps.x);
-                if (ang < 0.0) ang += TAU;
-                float rel = mod(ang - startRad + TAU, TAU);
-                float center = sectorWidth * 0.5;
-                float delta = max(abs(rel - center) - center, 0.0);
-                float sAng = radius * delta;
-                aA = 1.0 - smoothstep(0.0, betterPx, sAng);
-            }
-            acc += aR * aA;
+        if (sectorWidth < TAU - 1e-6) {
+            float ang = atan(p.y, p.x);
+            if (ang < 0.0) ang += TAU;
+            float rel = mod(ang - startRad + TAU, TAU);
+            float center = sectorWidth * 0.5;
+            float outside = radius * max(abs(rel - center) - center, 0.0);
+            sector = clamp(1.0 - outside / px, 0.0, 1.0);
         }
-        col.a *= acc * 0.125;
-        col.a *= clipMask;
+        col.a *= shape * sector * clipMask;
     } else if (mode == 1u) {
-        float Smoothness = 1.0;
-        float CornerSmoothness = 2.0;
-
-        vec2 halfSizePix = halfSize - 0.5;
-
-        float dOuter = roundedBoxSDFO(p, halfSizePix, cornerRadii, CornerSmoothness);
-        float aa = max(fwidth(dOuter), 1e-4) * Smoothness;
-
-        vec2 halfInner = max(halfSizePix - thickness, 0.0);
-        vec4 innerRadius = max(cornerRadii - thickness, 0.0);
-        float dInner = roundedBoxSDFO(p, halfInner, innerRadius, CornerSmoothness);
-
-        float alphaOuter = 1.0 - smoothstep(-aa, aa, dOuter);
-        float alphaInner = 1.0 - smoothstep(-aa, aa, dInner);
-
-        col.a *= clamp(alphaOuter - alphaInner, 0.0, 1.0);
-        col.a *= clipMask;
+        float dOuter = sdRoundBox(p, halfSize, cornerRadii);
+        vec2 halfInner = max(halfSize - thickness, 0.0);
+        vec4 innerRadii = max(cornerRadii - thickness, 0.0);
+        float dInner = sdRoundBox(p, halfInner, innerRadii);
+        col.a *= clamp(coverage(dOuter, px) - coverage(dInner, px), 0.0, 1.0) * clipMask;
     } else {
-        vec2 dx = dFdx(vLocalPx);
-        vec2 dy = dFdy(vLocalPx);
-        float px = 0.5 * (length(dx) + length(dy)) + 1e-6;
-        
-        float minHalf = min(halfSize.x, halfSize.y);
-        float minR = min(min(cornerRadii.x, cornerRadii.y), min(cornerRadii.z, cornerRadii.w));
-        
-        if (minR >= minHalf - 0.5) {
-            vec2 offset = max(halfSize - vec2(minHalf), vec2(0.0));
-            float d = length(max(abs(p) - offset, vec2(0.0))) - minHalf;
-            float a = 1.0 - smoothstep(-px, px, d);
-            col.a *= a;
-            col.a *= clipMask;
-        } else {
-            vec2 offs[4] = vec2[4](
-                vec2(-0.33, -0.33), vec2(0.33, -0.33), vec2(0.33, 0.33), vec2(-0.33, 0.33)
-            );
-            float acc = 0.0;
-            for (int i = 0; i < 4; i++) {
-                vec2 ps = p + dx * offs[i].x + dy * offs[i].y;
-                float dS = sdRoundBox(ps, halfSize, cornerRadii);
-                float a = 1.0 - smoothstep(0.0, px, dS);
-                acc += a;
-            }
-            col.a *= acc * 0.25;
-            col.a *= clipMask;
-        }
+        col.a *= coverage(sdRoundBox(p, halfSize, cornerRadii), px) * clipMask;
     }
 
     col.rgb *= col.a;

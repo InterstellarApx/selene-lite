@@ -192,6 +192,15 @@ public final class Renderer2D {
       }
    }
 
+   public void drawDistanceField(int texture, float range, float x, float y, float w, float h, float u0, float v0,
+         float u1, float v1, int tintRgba) {
+      this.ensureFrame();
+      if (texture > 0) {
+         this.backend.enqueueMsdfGlyph(texture, range, x, y, w, h, u0, v0, u1, v1, this.modulateColor(tintRgba),
+               this.transformStack.current());
+      }
+   }
+
    public void drawRgbaTextureWithUVRounded(int texture, float x, float y, float w, float h, float u0, float v0,
          float u1, float v1, float rounding) {
       this.ensureFrame();
@@ -333,6 +342,11 @@ public final class Renderer2D {
       y--;
       w += 2.0F;
       h += 2.0F;
+      for (int i = 0; i < 4; i++) {
+         if (radii[i] > 0.0F) {
+            radii[i]++;
+         }
+      }
       normalizeCornerRadii(w, h, radii);
       this.batcher
             .enqueueRectOutline(

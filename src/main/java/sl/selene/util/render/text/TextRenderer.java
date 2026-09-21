@@ -71,6 +71,8 @@ public final class TextRenderer {
             float safeOutlineWidth = Math.max(0.0F, outlineWidth);
             String[] lines = content.split("\\n", -1);
 
+            boolean snapToPixels = matrix[0] == 1.0F && matrix[1] == 0.0F && matrix[3] == 0.0F && matrix[4] == 1.0F;
+
             for (String line : lines) {
                float width = this.measureLineWidth(line, scale);
                float startX = x;
@@ -80,7 +82,13 @@ public final class TextRenderer {
                   startX = x - width;
                }
 
-               this.drawTextLine(startX, baselineY, scale, line, color, matrix, texture, pxRange, safeOutlineWidth);
+               float penY = baselineY;
+               if (snapToPixels) {
+                  startX = Math.round(startX + matrix[2]) - matrix[2];
+                  penY = Math.round(penY + matrix[5]) - matrix[5];
+               }
+
+               this.drawTextLine(startX, penY, scale, line, color, matrix, texture, pxRange, safeOutlineWidth);
                baselineY += lineHeight;
             }
          }

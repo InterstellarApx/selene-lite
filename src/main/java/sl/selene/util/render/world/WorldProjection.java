@@ -9,6 +9,7 @@ import net.minecraft.util.math.Vec3d;
 import org.joml.Quaternionf;
 import org.joml.Vector2d;
 import org.joml.Vector3f;
+import sl.selene.mixin.GameRendererAccessor;
 
 @Environment(EnvType.CLIENT)
 public final class WorldProjection {
@@ -85,14 +86,6 @@ public final class WorldProjection {
    }
 
    private static double resolveFov(GameRenderer gameRenderer, Camera camera, float tickDelta) {
-      try {
-         var method = GameRenderer.class.getDeclaredMethod("getFov", Camera.class, float.class, boolean.class);
-         method.setAccessible(true);
-         return (Double) method.invoke(gameRenderer, camera, tickDelta, true);
-      } catch (ReflectiveOperationException ignored) {
-         MinecraftClient mc = MinecraftClient.getInstance();
-         double base = mc != null ? mc.options.getFov().getValue().intValue() : 70;
-         return base;
-      }
+      return ((GameRendererAccessor) gameRenderer).invokeGetFov(camera, tickDelta, true);
    }
 }
