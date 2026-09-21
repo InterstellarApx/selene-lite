@@ -219,8 +219,8 @@ public class Freecam extends Module {
       double yawRad = Math.toRadians(moveYaw);
       double sinYaw = -Math.sin(yawRad);
       double cosYaw = Math.cos(yawRad);
-      double rightX = cosYaw;
-      double rightZ = -sinYaw;
+      double rightX = -cosYaw;
+      double rightZ = sinYaw;
 
       this.previousPosition.set(this.currentPosition);
       this.previousYaw = this.yaw;
