@@ -46,7 +46,6 @@ public final class GlState {
       try {
          IntBuffer buf4 = stack.mallocInt(4);
          IntBuffer buf1 = stack.mallocInt(1);
-         s.framebuffer = GL11.glGetInteger(36160);
          s.drawFramebuffer = GL11.glGetInteger(36006);
          s.readFramebuffer = GL11.glGetInteger(36010);
          GL11.glGetIntegerv(2978, buf4);
@@ -126,7 +125,6 @@ public final class GlState {
          GL11.glDepthMask(s.depthMask);
          GL11.glViewport(s.viewport[0], s.viewport[1], s.viewport[2], s.viewport[3]);
          GL11.glScissor(s.scissorBox[0], s.scissorBox[1], s.scissorBox[2], s.scissorBox[3]);
-         GL30.glBindFramebuffer(36160, s.framebuffer);
          GL30.glBindFramebuffer(36009, s.drawFramebuffer);
          GL30.glBindFramebuffer(36008, s.readFramebuffer);
          restoreDrawBuffer(s.drawFramebuffer, s.drawBuffer);
@@ -180,7 +178,6 @@ public final class GlState {
 
    @Environment(EnvType.CLIENT)
    public static final class Snapshot {
-      public int framebuffer;
       public int drawFramebuffer;
       public int readFramebuffer;
       public final int[] viewport = new int[4];

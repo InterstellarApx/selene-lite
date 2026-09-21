@@ -211,7 +211,6 @@ public class InGameHudMixin {
                int tempFbo = 0;
                int savedDrawFbo = GL11.glGetInteger(36006);
                int savedReadFbo = GL11.glGetInteger(36010);
-               int savedFbo = GL11.glGetInteger(36160);
                if (mainFramebuffer != null) {
                   if (mainFramebuffer.getColorAttachment() instanceof GlTexture glColor) {
                      int mainFramebufferTextureId = glColor.getGlId();
@@ -226,7 +225,8 @@ public class InGameHudMixin {
                         GL30.glDeleteFramebuffers(cachedTempFbo);
                         cachedTempFbo = 0;
                         tempFbo = 0;
-                        GL30.glBindFramebuffer(36160, savedFbo);
+                        GL30.glBindFramebuffer(36009, savedDrawFbo);
+                        GL30.glBindFramebuffer(36008, savedReadFbo);
                      } else {
                         tempFbo = cachedTempFbo;
                      }
@@ -272,7 +272,6 @@ public class InGameHudMixin {
 
                   GL30.glBindFramebuffer(36009, savedDrawFbo);
                   GL30.glBindFramebuffer(36008, savedReadFbo);
-                  GL30.glBindFramebuffer(36160, savedFbo);
                }
             }
          }
