@@ -254,7 +254,6 @@ public class InGameHudMixin {
                      try {
                         renderer.begin(width, height);
                         rendererBegun = true;
-                        renderer.prepareBlur(GlassStyle.backdropRadius());
                         EventManager.call(new EventScreen(client, renderer, FontRegistry.INTER_MEDIUM, width, height, context));
                      } finally {
                         if (rendererBegun) {
