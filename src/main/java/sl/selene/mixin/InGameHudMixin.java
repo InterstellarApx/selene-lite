@@ -24,9 +24,10 @@ import org.lwjgl.BufferUtils;
 import sl.selene.Selene;
 import sl.selene.event.EventManager;
 import sl.selene.event.impl.EventScreen;
-import sl.selene.module.impl.visuals.Hud;
 import sl.selene.module.impl.visuals.HUD.TargetHUD;
+import sl.selene.module.impl.visuals.Hud;
 import sl.selene.ui.draggable.DraggableManager;
+import sl.selene.ui.gui.component.render.GlassStyle;
 import sl.selene.util.render.animation.AnimationSystem;
 import sl.selene.util.render.backends.gl.GlState;
 import sl.selene.util.render.core.Renderer2D;
@@ -253,6 +254,7 @@ public class InGameHudMixin {
                      try {
                         renderer.begin(width, height);
                         rendererBegun = true;
+                        renderer.prepareBlur(GlassStyle.backdropRadius());
                         EventManager.call(new EventScreen(client, renderer, FontRegistry.INTER_MEDIUM, width, height, context));
                      } finally {
                         if (rendererBegun) {

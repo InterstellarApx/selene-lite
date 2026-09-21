@@ -2,6 +2,7 @@ package sl.selene.ui.gui.component.render;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import sl.selene.ui.gui.GuiScreen;
 import sl.selene.util.color.ColorUtil;
 import sl.selene.util.render.core.Renderer2D;
 
@@ -11,7 +12,6 @@ public final class GlassStyle {
    public static final int FRESNEL = Renderer2D.ColorUtil.rgba(255, 255, 255, 104);
    public static final float FRESNEL_POWER = 42.0F;
    public static final float BASE_ALPHA = 0.16F;
-   public static final float FRESNEL_MIX = 0.55F;
    private static final int SURFACE_R = 10;
    private static final int SURFACE_G = 14;
    private static final int SURFACE_B = 22;
@@ -19,6 +19,8 @@ public final class GlassStyle {
    public static final float DISTORT = 9.0F;
 
    public static final float BACKDROP_RADIUS = 10.0F;
+   public static final float FROSTED_BACKDROP_RADIUS = 30.0F;
+   private static final float FROST_SPEED = 9.0F;
 
    public static final int OUTLINE_TINT = Renderer2D.ColorUtil.rgba(255, 255, 255, 64);
    public static final int OUTLINE_FRESNEL = Renderer2D.ColorUtil.rgba(168, 168, 174, 86);
@@ -30,7 +32,28 @@ public final class GlassStyle {
 
    private static final long SHINE_PERIOD_MS = 2400L;
 
+   private static float frost = -1.0F;
+   private static long frostUpdatedAt;
+
    private GlassStyle() {
+   }
+
+   public static float frost() {
+      float target = GuiScreen.frostedGlass ? 1.0F : 0.0F;
+      long now = System.nanoTime();
+      if (frost < 0.0F) {
+         frost = target;
+      } else {
+         float seconds = (now - frostUpdatedAt) / 1.0E9F;
+         frost += (target - frost) * (1.0F - (float) Math.exp(-seconds * FROST_SPEED));
+      }
+
+      frostUpdatedAt = now;
+      return frost;
+   }
+
+   public static float backdropRadius() {
+      return BACKDROP_RADIUS + (FROSTED_BACKDROP_RADIUS - BACKDROP_RADIUS) * frost();
    }
 
    public static float shinePhase() {
@@ -44,8 +67,15 @@ public final class GlassStyle {
    public static void fill(
          Renderer2D r, float x, float y, float w, float h,
          float rTL, float rTR, float rBR, float rBL, float alpha) {
+      fill(r, x, y, w, h, rTL, rTR, rBR, rBL, alpha, false);
+   }
+
+   private static void fill(
+         Renderer2D r, float x, float y, float w, float h,
+         float rTL, float rTR, float rBR, float rBL, float alpha, boolean castShadow) {
       float safeAlpha = Math.max(0.0F, Math.min(1.0F, alpha));
-      r.glass(x, y, w, h, rTL, rTR, rBR, rBL, FRESNEL, FRESNEL_POWER, BASE_ALPHA, true, FRESNEL_MIX, DISTORT, alpha);
+      r.glass(x, y, w, h, rTL, rTR, rBR, rBL, FRESNEL, FRESNEL_POWER, BASE_ALPHA, castShadow, frost(), DISTORT,
+            alpha);
 
       r.rect(x + 1.0F, y + 1.0F, w - 2.0F, h - 2.0F, rTL, rTR, rBR, rBL,
             Renderer2D.ColorUtil.rgba(SURFACE_R, SURFACE_G, SURFACE_B, Math.round(SURFACE_ALPHA * safeAlpha)));
@@ -65,7 +95,7 @@ public final class GlassStyle {
    public static void panel(
          Renderer2D r, float x, float y, float w, float h,
          float rTL, float rTR, float rBR, float rBL, float alpha) {
-      fill(r, x, y, w, h, rTL, rTR, rBR, rBL, alpha);
+      fill(r, x, y, w, h, rTL, rTR, rBR, rBL, alpha, true);
       outline(r, x, y, w, h, rTL, rTR, rBR, rBL, alpha);
    }
 

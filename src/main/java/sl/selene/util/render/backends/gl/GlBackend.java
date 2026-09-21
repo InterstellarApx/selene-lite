@@ -21,7 +21,6 @@ import org.lwjgl.opengl.GL43;
 import org.lwjgl.opengl.GLCapabilities;
 import org.lwjgl.opengl.GLDebugMessageCallback;
 import org.lwjgl.opengl.KHRDebug;
-import sl.selene.ui.gui.GuiScreen;
 import sl.selene.util.other.PlatformUtil;
 import sl.selene.util.render.core.RenderFrameMetrics;
 import sl.selene.util.render.backends.RenderBackend;
@@ -80,12 +79,14 @@ public final class GlBackend implements RenderBackend {
    private int uGlassSamplerLoc = -1;
    private int uGlassScissorLoc = -1;
    private int uGlassScissorEnabledLoc = -1;
+   private int uGlassGuiScaleLoc = -1;
    private int uGlassOutlineViewportLoc = -1;
    private int uGlassOutlineBlurScaleLoc = -1;
    private int uGlassOutlineBlurOffsetLoc = -1;
    private int uGlassOutlineSamplerLoc = -1;
    private int uGlassOutlineScissorLoc = -1;
    private int uGlassOutlineScissorEnabledLoc = -1;
+   private int uGlassOutlineGuiScaleLoc = -1;
    private ByteBuffer glassInstanceBuffer;
    private GLDebugMessageCallback debugCallback;
    private final DownsampleBlur screenBlur = new DownsampleBlur(32856, 5121);
@@ -95,7 +96,6 @@ public final class GlBackend implements RenderBackend {
    private int preparedBlurH = 0;
    private float preparedBlurScaleX = 1.0F;
    private float preparedBlurScaleY = 1.0F;
-   private int whitePixelTex = 0;
    private int darkPixelTex = 0;
    private int transparentPixelTex = 0;
    private static final java.nio.ByteBuffer PIXEL_BUF = org.lwjgl.BufferUtils.createByteBuffer(4);
@@ -947,18 +947,13 @@ public final class GlBackend implements RenderBackend {
                GlState.pop(state);
             }
 
-            float var28 = (float) Math.sqrt(Math.max(0.0F, actualScaleX) * Math.max(0.0F, actualScaleY));
-            int blurred = this.downscaledCaptureTex;
+            float captureScale = (float) Math.sqrt(Math.max(0.0F, actualScaleX) * Math.max(0.0F, actualScaleY));
+            int blurred = this.screenBlur.blurFromColorTexture(
+                  this.downscaledCaptureTex, this.downscaledCaptureW, this.downscaledCaptureH, radiusPx * captureScale);
             if (blurred == 0) {
                this.preparedBlurTex = 0;
                this.preparedBlurW = 0;
                this.preparedBlurH = 0;
-               this.preparedBlurScaleX = 1.0F;
-               this.preparedBlurScaleY = 1.0F;
-            } else if (GuiScreen.frostedGlass) {
-               this.preparedBlurTex = this.whitePixelTexture();
-               this.preparedBlurW = 1;
-               this.preparedBlurH = 1;
                this.preparedBlurScaleX = 1.0F;
                this.preparedBlurScaleY = 1.0F;
             } else if (!readFromMain && this.isCaptureBlack(blurred, this.downscaledCaptureW, this.downscaledCaptureH)) {
@@ -1026,13 +1021,6 @@ public final class GlBackend implements RenderBackend {
          GL30.glFramebufferTexture2D(36008, 36064, 3553, 0, 0);
          GlState.pop(state);
       }
-   }
-
-   private int whitePixelTexture() {
-      if (this.whitePixelTex == 0) {
-         this.whitePixelTex = this.solidPixelTexture(255, 255, 255);
-      }
-      return this.whitePixelTex;
    }
 
    private int darkPixelTexture() {
@@ -1241,6 +1229,7 @@ public final class GlBackend implements RenderBackend {
       this.uGlassSamplerLoc = this.glassProgram.getUniformLocation("uBlur");
       this.uGlassScissorLoc = this.glassProgram.getUniformLocation("uScissor");
       this.uGlassScissorEnabledLoc = this.glassProgram.getUniformLocation("uScissorEnabled");
+      this.uGlassGuiScaleLoc = this.glassProgram.getUniformLocation("uGuiScale");
 
       this.glassOutlineProgram = ShaderProgram.fromResources("assets/selene/shaders/ui/glass.vert", "assets/selene/shaders/ui/glass_outline.frag");
       this.uGlassOutlineViewportLoc = this.glassOutlineProgram.getUniformLocation("uViewport");
@@ -1249,6 +1238,7 @@ public final class GlBackend implements RenderBackend {
       this.uGlassOutlineSamplerLoc = this.glassOutlineProgram.getUniformLocation("uBlur");
       this.uGlassOutlineScissorLoc = this.glassOutlineProgram.getUniformLocation("uScissor");
       this.uGlassOutlineScissorEnabledLoc = this.glassOutlineProgram.getUniformLocation("uScissorEnabled");
+      this.uGlassOutlineGuiScaleLoc = this.glassOutlineProgram.getUniformLocation("uGuiScale");
 
       this.glassQuadVao = GL30.glGenVertexArrays();
       this.glassQuadVbo = GL15.glGenBuffers();
@@ -1286,8 +1276,8 @@ public final class GlBackend implements RenderBackend {
          int fresnelArgb,
          float fresnelPower,
          float baseAlpha,
-         boolean fresnelInvert,
-         float fresnelMix,
+         boolean castShadow,
+         float frost,
          float distortStrength,
          float globalAlpha,
          float[] transform) {
@@ -1313,12 +1303,12 @@ public final class GlBackend implements RenderBackend {
       buf.putFloat(clamp01(globalAlpha));
       buf.putFloat(Math.max(0.001F, fresnelPower));
       buf.putFloat(clamp01(baseAlpha));
-      buf.putFloat(clamp01(fresnelMix));
+      buf.putFloat(clamp01(frost));
       buf.putFloat(fr);
       buf.putFloat(fg);
       buf.putFloat(fb);
       buf.putFloat(fa);
-      buf.putFloat(fresnelInvert ? 1.0F : 0.0F);
+      buf.putFloat(castShadow ? 1.0F : 0.0F);
       buf.putFloat(distortStrength);
       buf.putFloat(0.0F);
       buf.putFloat(0.0F);
@@ -1330,7 +1320,7 @@ public final class GlBackend implements RenderBackend {
 
       return this.renderGlassQuad(
             this.glassProgram, this.uGlassViewportLoc, this.uGlassBlurScaleLoc, this.uGlassBlurOffsetLoc,
-            this.uGlassSamplerLoc, this.uGlassScissorLoc, this.uGlassScissorEnabledLoc, buf);
+            this.uGlassSamplerLoc, this.uGlassScissorLoc, this.uGlassScissorEnabledLoc, this.uGlassGuiScaleLoc, buf);
    }
 
    public boolean drawGlassOutline(
@@ -1398,7 +1388,7 @@ public final class GlBackend implements RenderBackend {
       return this.renderGlassQuad(
             this.glassOutlineProgram, this.uGlassOutlineViewportLoc, this.uGlassOutlineBlurScaleLoc,
             this.uGlassOutlineBlurOffsetLoc, this.uGlassOutlineSamplerLoc, this.uGlassOutlineScissorLoc,
-            this.uGlassOutlineScissorEnabledLoc, buf);
+            this.uGlassOutlineScissorEnabledLoc, this.uGlassOutlineGuiScaleLoc, buf);
    }
 
    private void putGlassHeader(ByteBuffer buf, float[] bounds) {
@@ -1453,6 +1443,7 @@ public final class GlBackend implements RenderBackend {
          int samplerLoc,
          int scissorLoc,
          int scissorEnabledLoc,
+         int guiScaleLoc,
          ByteBuffer buf) {
       float uScaleX = this.preparedBlurW > 0 ? this.preparedBlurScaleX / this.preparedBlurW : 0.0F;
       float uScaleY = this.preparedBlurH > 0 ? -this.preparedBlurScaleY / this.preparedBlurH : 0.0F;
@@ -1484,6 +1475,11 @@ public final class GlBackend implements RenderBackend {
 
          if (scissorEnabledLoc >= 0) {
             GL20.glUniform1f(scissorEnabledLoc, this.batch.isClipEnabled() ? 1.0F : 0.0F);
+         }
+
+         if (guiScaleLoc >= 0) {
+            MinecraftClient client = MinecraftClient.getInstance();
+            GL20.glUniform1f(guiScaleLoc, client != null ? (float) client.getWindow().getScaleFactor() : 1.0F);
          }
 
          if (scissorLoc >= 0) {

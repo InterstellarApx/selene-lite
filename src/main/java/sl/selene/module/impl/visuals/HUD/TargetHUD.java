@@ -1,13 +1,9 @@
 package sl.selene.module.impl.visuals.HUD;
 
-import com.mojang.blaze3d.opengl.GlStateManager;
 import java.util.ArrayList;
 import java.util.List;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.client.texture.AbstractTexture;
-import net.minecraft.client.texture.TextureManager;
-import net.minecraft.client.texture.GlTexture;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
@@ -29,6 +25,7 @@ import sl.selene.util.render.core.Renderer2D;
 import sl.selene.util.render.math.ScaledResolution;
 import sl.selene.util.render.motion.Motion;
 import sl.selene.util.render.text.FontRegistry;
+import sl.selene.util.render.ui.EntityHead;
 import sl.selene.util.render.ui.UiIcons;
 
 @Environment(EnvType.CLIENT)
@@ -168,7 +165,9 @@ public class TargetHUD {
    private static void renderLiving(Renderer2D r2, LivingEntity entity, float x, float y, float width, float height,
          float alpha) {
       r2.pushAlpha(alpha);
-      UiIcons.crosshair(r2, x + 32.0F, y + 34.0F, 22.0F, alpha * 0.45F);
+      if (!EntityHead.draw(r2, entity, x + 10.0F, y + 10.0F, 44.0F, 7.0F)) {
+         UiIcons.crosshair(r2, x + 32.0F, y + 34.0F, 22.0F, alpha * 0.45F);
+      }
       String name = entity instanceof CreeperEntity ? "Sad Creeper" : entity.getName().getString();
       r2.text(FontRegistry.INTER_MEDIUM, x + 74.0F, y + 22.0F, 28.0F, name, -1);
       float targetWidth = Math.min(entity.getHealth() / entity.getMaxHealth() * 105.0F, 105.0F);
@@ -197,26 +196,11 @@ public class TargetHUD {
    private static void drawPlayerHeadCustom(Renderer2D r2, Identifier skinTexture, float x, float y, float size,
          float alpha) {
       try {
-         TextureManager textureManager = mc.getTextureManager();
-         if (textureManager == null) {
-            return;
-         }
-
-         AbstractTexture texture = textureManager.getTexture(skinTexture);
-         if (texture == null) {
-            return;
-         }
-
-         if (!(texture.getGlTexture() instanceof GlTexture glTexture)) {
-            return;
-         }
-
-         int textureId = glTexture.getGlId();
+         int textureId = EntityHead.textureId(mc, skinTexture);
          if (textureId <= 0) {
             return;
          }
 
-         GlStateManager._bindTexture(textureId);
          r2.pushAlpha(alpha);
          r2.drawRgbaTextureWithUVRounded(textureId, x, y, size, size, 0.125F, 0.125F, 0.25F, 0.25F, 7.0F);
          r2.drawRgbaTextureWithUVRounded(textureId, x, y, size, size, 0.625F, 0.125F, 0.75F, 0.25F, 7.0F);

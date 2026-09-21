@@ -158,8 +158,8 @@ public interface RenderBackend {
          int fresnelArgb,
          float fresnelPower,
          float baseAlpha,
-         boolean fresnelInvert,
-         float fresnelMix,
+         boolean castShadow,
+         float frost,
          float distortStrength,
          float globalAlpha,
          float[] transform);

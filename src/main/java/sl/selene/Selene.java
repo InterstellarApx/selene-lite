@@ -235,7 +235,7 @@ public class Selene implements ClientModInitializer {
 
                try {
 
-                  renderer.prepareBlur(GlassStyle.BACKDROP_RADIUS);
+                  renderer.prepareBlur(GlassStyle.backdropRadius());
                   EventManager.call(new RenderEvent(client, renderer, uiFont, width, height));
                } finally {
                   if (rendererBegun) {

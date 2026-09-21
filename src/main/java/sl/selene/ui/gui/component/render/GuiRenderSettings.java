@@ -18,7 +18,7 @@ public final class GuiRenderSettings extends GuiScreen {
    private static final float CARD_HEIGHT = 184.0F;
    private static final float CARD_PADDING = 15.0F;
 
-   private static final float TOGGLE_Y = 97.0F;
+   private static final float TOGGLE_Y = 143.0F;
    private static final float TOGGLE_H = 22.0F;
    private static final float TOGGLE_W = 34.0F;
    private static final float HUD_MODE_Y = 57.0F;

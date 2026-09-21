@@ -17,23 +17,23 @@ import sl.selene.util.render.core.RenderFrameMetrics;
 @Environment(EnvType.CLIENT)
 public final class DownsampleBlur {
    private static final int GL_COLOR_ATTACHMENT0 = 36064;
+   private static final int MAX_PASSES = 8;
    private static final IntBuffer DRAW_BUFFER_COLOR0 = BufferUtils.createIntBuffer(1);
 
    static {
       DRAW_BUFFER_COLOR0.put(GL_COLOR_ATTACHMENT0).flip();
    }
 
-   private final ShaderProgram upsampleProgram;
+   private final ShaderProgram kawaseProgram;
    private final int intermediateInternalFormat;
    private final int intermediatePixelType;
-   private final int upSamplerLoc;
-   private final int upTexelSizeLoc;
-   private final int upOffsetLoc;
+   private final int samplerLoc;
+   private final int texelSizeLoc;
+   private final int offsetLoc;
    private int quadVao;
    private int quadVbo;
-   private int lastPassCount = 0;
-   private final DownsampleBlur.LevelTarget fullResolutionTarget = new DownsampleBlur.LevelTarget();
-   private final DownsampleBlur.LevelTarget smallTempTarget = new DownsampleBlur.LevelTarget();
+   private final DownsampleBlur.LevelTarget pingTarget = new DownsampleBlur.LevelTarget();
+   private final DownsampleBlur.LevelTarget pongTarget = new DownsampleBlur.LevelTarget();
 
    public float minimumRadius() {
       return 0.5F;
@@ -54,12 +54,12 @@ public final class DownsampleBlur {
       } else if (intermediatePixelType == 0) {
          throw new IllegalArgumentException("intermediatePixelType must be a valid OpenGL pixel type constant");
       } else {
-         this.upsampleProgram = ShaderProgram.fromResources("assets/selene/shaders/blur/blur_fullscreen.vert", "assets/selene/shaders/blur/blur_upsample.frag");
+         this.kawaseProgram = ShaderProgram.fromResources("assets/selene/shaders/blur/blur_fullscreen.vert", "assets/selene/shaders/blur/blur_downsample.frag");
          this.intermediateInternalFormat = intermediateInternalFormat;
          this.intermediatePixelType = intermediatePixelType;
-         this.upSamplerLoc = this.upsampleProgram.getUniformLocation("uSource");
-         this.upTexelSizeLoc = this.upsampleProgram.getUniformLocation("uTexelSize");
-         this.upOffsetLoc = this.upsampleProgram.getUniformLocation("uOffset");
+         this.samplerLoc = this.kawaseProgram.getUniformLocation("uSource");
+         this.texelSizeLoc = this.kawaseProgram.getUniformLocation("uTexelSize");
+         this.offsetLoc = this.kawaseProgram.getUniformLocation("uOffset");
 
          this.quadVao = GL30.glGenVertexArrays();
          this.quadVbo = GL15.glGenBuffers();
@@ -78,8 +78,8 @@ public final class DownsampleBlur {
    }
 
    public void destroy() {
-      this.destroyLevel(this.fullResolutionTarget);
-      this.destroyLevel(this.smallTempTarget);
+      this.destroyLevel(this.pingTarget);
+      this.destroyLevel(this.pongTarget);
       if (this.quadVao != 0) {
          GL30.glDeleteVertexArrays(this.quadVao);
          this.quadVao = 0;
@@ -90,7 +90,7 @@ public final class DownsampleBlur {
          this.quadVbo = 0;
       }
 
-      this.upsampleProgram.delete();
+      this.kawaseProgram.delete();
    }
 
    public int blurFromColorTexture(int sourceTexture, int width, int height, float radiusPx) {
@@ -99,17 +99,11 @@ public final class DownsampleBlur {
 
    public int blurFromColorTexture(int sourceTexture, int width, int height, float radiusPx, boolean preserveState) {
       if (sourceTexture != 0 && width > 0 && height > 0) {
-         float effectiveRadius = Math.max(radiusPx, 0.5F);
-
-         int passCount = this.determinePassCount(effectiveRadius, width, height);
-         if (passCount <= 0) {
-            return sourceTexture;
-         }
-
-         float[] offsets = this.buildOffsets(passCount, effectiveRadius);
-         this.ensureLevel(this.fullResolutionTarget, width, height);
-         this.ensureLevel(this.smallTempTarget, width, height);
-         this.lastPassCount = passCount;
+         int passCount = passCount(Math.max(radiusPx, 0.5F));
+         int halfWidth = (width + 1) / 2;
+         int halfHeight = (height + 1) / 2;
+         this.ensureLevel(this.pingTarget, halfWidth, halfHeight);
+         this.ensureLevel(this.pongTarget, halfWidth, halfHeight);
 
          GlState.Snapshot snapshot = preserveState ? GlState.push() : null;
 
@@ -122,8 +116,7 @@ public final class DownsampleBlur {
             GlState.disableFramebufferSrgb();
             GL13.glActiveTexture(33984);
             GL30.glBindVertexArray(this.quadVao);
-            this.runDownsampleBlur(sourceTexture, width, height, passCount, offsets);
-            var12 = this.fullResolutionTarget.texture;
+            var12 = this.runKawase(sourceTexture, width, height, passCount);
          } finally {
             GL30.glBindVertexArray(0);
             GL20.glUseProgram(0);
@@ -141,35 +134,33 @@ public final class DownsampleBlur {
       }
    }
 
-   private void runDownsampleBlur(int sourceTexture, int width, int height, int passCount, float[] offsets) {
-      if (offsets == null || offsets.length != passCount) {
-         throw new IllegalArgumentException("offsets length must match passCount");
+   private int runKawase(int sourceTexture, int width, int height, int passCount) {
+      this.kawaseProgram.use();
+      if (this.samplerLoc >= 0) {
+         GL20.glUniform1i(this.samplerLoc, 0);
       }
 
-      float texelX = 1.0F / Math.max(1, width);
-      float texelY = 1.0F / Math.max(1, height);
-      this.upsampleProgram.use();
-      if (this.upSamplerLoc >= 0) {
-         GL20.glUniform1i(this.upSamplerLoc, 0);
-      }
-      if (this.upTexelSizeLoc >= 0) {
-         GL20.glUniform2f(this.upTexelSizeLoc, texelX, texelY);
+      this.pass(sourceTexture, width, height, this.pingTarget, 1.0F);
+      DownsampleBlur.LevelTarget current = this.pingTarget;
+      for (int i = 1; i <= passCount; i++) {
+         DownsampleBlur.LevelTarget target = current == this.pingTarget ? this.pongTarget : this.pingTarget;
+         this.pass(current.texture, current.width, current.height, target, i - 0.5F);
+         current = target;
       }
 
-      boolean startWithSmall = (passCount % 2 == 0);
-      int currentTexture = sourceTexture;
-      for (int i = 0; i < passCount; i++) {
-         boolean last = (i == passCount - 1);
-         boolean wantSmall = !last && (((i & 1) == 0) == startWithSmall);
-         DownsampleBlur.LevelTarget target = wantSmall ? this.smallTempTarget : this.fullResolutionTarget;
-         if (this.upOffsetLoc >= 0) {
-            GL20.glUniform1f(this.upOffsetLoc, offsets[i]);
-         }
-         this.bindTarget(target);
-         GL11.glBindTexture(3553, currentTexture);
-         this.drawQuad();
-         currentTexture = target.texture;
+      return current.texture;
+   }
+
+   private void pass(int sourceTexture, int sourceWidth, int sourceHeight, DownsampleBlur.LevelTarget target, float offset) {
+      if (this.texelSizeLoc >= 0) {
+         GL20.glUniform2f(this.texelSizeLoc, 1.0F / Math.max(1, sourceWidth), 1.0F / Math.max(1, sourceHeight));
       }
+      if (this.offsetLoc >= 0) {
+         GL20.glUniform1f(this.offsetLoc, offset);
+      }
+      this.bindTarget(target);
+      GL11.glBindTexture(3553, sourceTexture);
+      this.drawQuad();
    }
 
    private void drawQuad() {
@@ -245,37 +236,8 @@ public final class DownsampleBlur {
       }
    }
 
-   private int determinePassCount(float radiusPx, int width, int height) {
-      int available = 0;
-      int w = width;
-      int h = height;
-
-      while (available < 6 && (w > 1 || h > 1)) {
-         w = Math.max(1, w / 2);
-         h = Math.max(1, h / 2);
-         available++;
-         if (w == 1 && h == 1) {
-            break;
-         }
-      }
-
-      if (available == 0) {
-         available = 1;
-      }
-
-      int desired = Math.max(1, (int)Math.ceil(Math.sqrt(radiusPx / 2.0F)));
-      return Math.min(available, desired);
-   }
-
-   private float[] buildOffsets(int passCount, float radiusPx) {
-      float[] offsets = new float[passCount];
-
-      float offset = Math.max(0.5F, radiusPx / (float) passCount);
-      for (int i = 0; i < passCount; i++) {
-         offsets[i] = offset;
-      }
-
-      return offsets;
+   private static int passCount(float radiusPx) {
+      return Math.max(1, Math.min(MAX_PASSES, (int) Math.ceil(Math.sqrt(radiusPx))));
    }
 
    @Environment(EnvType.CLIENT)

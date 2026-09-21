@@ -84,11 +84,9 @@ public class GuiRenderMain extends GuiScreen {
       float y1 = GuiScreen.y + GuiScreen.CONTENT_TOP;
       float rectWidth = GuiScreen.width - GuiScreen.SIDEBAR_WIDTH;
       float rectHeight = GuiScreen.height - GuiScreen.CONTENT_TOP;
-      float clipX = x1 + 5.0F;
       float clipY = y1 + 5.0F;
-      float clipWidth = rectWidth - 10.0F;
       float clipHeight = rectHeight - 10.0F;
-      renderer2D.pushRoundedClipRect(clipX, clipY, clipWidth, clipHeight, 0.0F, 0.0F, 0.0F, 0.0F);
+      renderer2D.pushRoundedClipRect(x1, clipY, rectWidth, clipHeight, 0.0F, 0.0F, 0.0F, 0.0F);
 
       List<Module> filteredModules = GuiScreen.modules;
       if (searchActive && !GuiScreen.searchText.isEmpty()) {
@@ -224,8 +222,6 @@ public class GuiRenderMain extends GuiScreen {
    ) {
       float drawnHeight = settingsVisible ? MODULE_CARD_HEIGHT + settingsHeight : MODULE_CARD_HEIGHT;
 
-      renderer2D.shadow(cardX, cardY + 1.5F, MODULE_CARD_WIDTH, MODULE_CARD_HEIGHT, 6.5F, 5.0F, 0.4F,
-            Renderer2D.ColorUtil.rgba(0, 0, 0, (int)(32.0F * mainAlpha)));
       GlassStyle.card(renderer2D, cardX, cardY, MODULE_CARD_WIDTH, drawnHeight, mainAlpha);
       if (settingsVisible && settingsAlphaAnim > 0.01F) {
          renderer2D.rect(cardX, cardY + MODULE_CARD_HEIGHT, MODULE_CARD_WIDTH, 1.0F,

@@ -528,12 +528,12 @@ public final class Renderer2D {
          int fresnelArgb,
          float fresnelPower,
          float baseAlpha,
-         boolean fresnelInvert,
-         float fresnelMix,
+         boolean castShadow,
+         float frost,
          float distortStrength,
          float globalAlpha) {
-      this.glass(x, y, w, h, radius, radius, radius, radius, fresnelArgb, fresnelPower, baseAlpha, fresnelInvert,
-            fresnelMix, distortStrength, globalAlpha);
+      this.glass(x, y, w, h, radius, radius, radius, radius, fresnelArgb, fresnelPower, baseAlpha, castShadow,
+            frost, distortStrength, globalAlpha);
    }
 
    public void glass(
@@ -548,8 +548,8 @@ public final class Renderer2D {
          int fresnelArgb,
          float fresnelPower,
          float baseAlpha,
-         boolean fresnelInvert,
-         float fresnelMix,
+         boolean castShadow,
+         float frost,
          float distortStrength,
          float globalAlpha) {
       this.ensureFrame();
@@ -571,8 +571,8 @@ public final class Renderer2D {
             fresnelArgb,
             fresnelPower,
             baseAlpha,
-            fresnelInvert,
-            fresnelMix,
+            castShadow,
+            frost,
             distortStrength,
             alpha * this.currentAlphaMultiplier(),
             this.transformStack.current());

@@ -93,6 +93,17 @@ public class GuiRenderUpPanel extends GuiScreen {
       return GuiRenderMain.isHovered(mouseX, mouseY, tabBarX(), tabBarY(), tabBarWidth(), tabBarHeight());
    }
 
+   public static void renderIslands(Renderer2D renderer2D, float mainAlpha) {
+      if (mainAlpha <= 0.001F) {
+         return;
+      }
+
+      float islandY = islandY();
+      float islandH = islandHeight();
+      GlassStyle.panel(renderer2D, searchIslandX(), islandY, SEARCH_ISLAND_W, islandH, 6.5F, 6.5F, 6.5F, 6.5F, mainAlpha);
+      GlassStyle.panel(renderer2D, closeIslandX(), islandY, CLOSE_ISLAND_W, islandH, 6.5F, 6.5F, 6.5F, 6.5F, mainAlpha);
+   }
+
    public static void renderUpPanel(Renderer2D renderer2D, MatrixStack pose, float mainAlpha) {
       if (mainAlpha <= 0.001F) {
          return;
@@ -103,8 +114,6 @@ public class GuiRenderUpPanel extends GuiScreen {
       float islandCenterY = islandY + islandH * 0.5F;
       float searchIslandX = searchIslandX();
       float closeIslandX = closeIslandX();
-      GlassStyle.panel(renderer2D, searchIslandX, islandY, SEARCH_ISLAND_W, islandH, 6.5F, 6.5F, 6.5F, 6.5F, mainAlpha);
-      GlassStyle.panel(renderer2D, closeIslandX, islandY, CLOSE_ISLAND_W, islandH, 6.5F, 6.5F, 6.5F, 6.5F, mainAlpha);
       float mx = GuiScreen.currentMouseX;
       float my = GuiScreen.currentMouseY;
       GuiScreen.hoverSearchIsland = easeHover(GuiScreen.hoverSearchIsland,

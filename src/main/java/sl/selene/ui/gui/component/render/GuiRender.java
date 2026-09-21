@@ -80,6 +80,7 @@ public class GuiRender extends GuiScreen {
                      GuiRenderLines.renderLines(renderer2D, pose, mainAlpha, true);
                      GuiServerMapPanel.renderPanel(renderer2D, pose, mainAlpha);
                   } else {
+                     GuiRenderUpPanel.renderIslands(renderer2D, mainAlpha);
                      renderer2D.pushRoundedClipRect(
                            GuiScreen.x, GuiScreen.y,
                            GuiScreen.width, GuiScreen.HEADER_CLIP_HEIGHT,
@@ -89,6 +90,7 @@ public class GuiRender extends GuiScreen {
                      } finally {
                         renderer2D.popClipRect();
                      }
+                     GuiRenderLeftPanel.renderPanel(renderer2D, mainAlpha);
                      renderer2D.pushRoundedClipRect(
                            GuiScreen.x, GuiScreen.y + 70.0F,
                            GuiScreen.SIDEBAR_WIDTH - GuiScreen.GAP, 176.0F,

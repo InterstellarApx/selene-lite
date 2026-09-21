@@ -15,12 +15,10 @@ public class GuiRenderLeftPanel extends GuiScreen {
    private static final float CATEGORY_ICON_X = 74.34F;
    private static final float CATEGORY_ICON_SIZE = 12.0F;
 
-   public static void renderLeftPanel(Renderer2D renderer2D, MatrixStack pose, float mainAlpha) {
+   public static void renderPanel(Renderer2D renderer2D, float mainAlpha) {
       if (mainAlpha <= 0.001F) {
          return;
       }
-
-      int textColor = Renderer2D.ColorUtil.replAlpha(Renderer2D.ColorUtil.getTextColor(1, 1), (int)(255.0F * mainAlpha));
 
       GlassStyle.panel(
          renderer2D,
@@ -34,6 +32,15 @@ public class GuiRenderLeftPanel extends GuiScreen {
          8.0F,
          mainAlpha
       );
+   }
+
+   public static void renderLeftPanel(Renderer2D renderer2D, MatrixStack pose, float mainAlpha) {
+      if (mainAlpha <= 0.001F) {
+         return;
+      }
+
+      int textColor = Renderer2D.ColorUtil.replAlpha(Renderer2D.ColorUtil.getTextColor(1, 1), (int)(255.0F * mainAlpha));
+
       if (GuiScreen.selectedTab == GuiScreen.TAB_SETTINGS) {
          GuiRenderSettings.renderSidebar(renderer2D, mainAlpha);
          return;

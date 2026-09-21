@@ -10,6 +10,7 @@ import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
+import org.lwjgl.opengl.GL33;
 import org.lwjgl.system.MemoryStack;
 
 @Environment(EnvType.CLIENT)
@@ -21,6 +22,7 @@ public final class GlState {
    private static final int GL_RIGHT = 1031;
    private static final int GL_COLOR_ATTACHMENT0 = 36064;
    private static final int GL_COLOR_ATTACHMENT15 = 36079;
+   private static final int TEXTURE_UNITS = 16;
 
    private GlState() {
    }
@@ -39,7 +41,14 @@ public final class GlState {
    public static void disableFramebufferSrgb() {
    }
 
+   public static void unbindSamplers() {
+      for (int unit = 0; unit < TEXTURE_UNITS; unit++) {
+         GL33.glBindSampler(unit, 0);
+      }
+   }
+
    public static GlState.Snapshot push() {
+      unbindSamplers();
       GlState.Snapshot s = new GlState.Snapshot();
       MemoryStack stack = MemoryStack.stackPush();
 
