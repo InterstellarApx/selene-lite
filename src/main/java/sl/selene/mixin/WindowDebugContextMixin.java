@@ -27,4 +27,3 @@ public class WindowDebugContextMixin {
       return GLFW.glfwCreateWindow(width, height, title, monitor, share);
    }
 }
-qu
