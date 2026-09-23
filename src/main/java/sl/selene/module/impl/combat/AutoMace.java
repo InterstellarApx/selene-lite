@@ -146,7 +146,7 @@ public final class AutoMace extends Module {
          return;
       }
 
-      if (!canAimDuringFall()) {
+      if (!hasSmashFallRequirement()) {
          target = null;
          aimer.reset();
          return;
@@ -158,7 +158,7 @@ public final class AutoMace extends Module {
          return;
       }
 
-      if (!hasSmashFallRequirement() || !isAttackReady()
+      if (!isAttackReady()
             || !withinReach(target) || raycastTarget(target) == null) {
          return;
       }
@@ -193,7 +193,7 @@ public final class AutoMace extends Module {
          return;
       }
 
-      if (state == State.IDLE && (!canAimDuringFall() || !isTargetValid(activeTarget))) {
+      if (state == State.IDLE && (!hasSmashFallRequirement() || !isTargetValid(activeTarget))) {
          aimer.reset();
          return;
       }
@@ -392,13 +392,11 @@ public final class AutoMace extends Module {
          return false;
       }
 
-      EntityHitResult hitResult = raycastTarget(target);
+      EntityHitResult hitResult = getCurrentCrosshairTarget();
       if (hitResult == null || !hit.press(hitResult)) {
          return false;
       }
 
-      mc.crosshairTarget = hitResult;
-      mc.targetedEntity = target;
       try {
          MinecraftClientAccessor accessor = (MinecraftClientAccessor) mc;
          accessor.setAttackCooldown(0);
@@ -407,6 +405,18 @@ public final class AutoMace extends Module {
          clearQueuedAttack();
          hit.release();
       }
+   }
+
+   private EntityHitResult getCurrentCrosshairTarget() {
+      if (mc.gameRenderer == null || target == null) {
+         return null;
+      }
+      mc.gameRenderer.updateCrosshairTarget(1.0F);
+      if (mc.crosshairTarget instanceof EntityHitResult hitResult
+            && hitResult.getEntity() == target) {
+         return hitResult;
+      }
+      return null;
    }
 
    private boolean attackPreparedTarget() {
