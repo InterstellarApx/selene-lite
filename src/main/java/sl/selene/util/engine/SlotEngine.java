@@ -2,6 +2,8 @@ package sl.selene.util.engine;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.util.InputUtil;
 import sl.selene.util.other.IMinecraft;
 
 @Environment(EnvType.CLIENT)
@@ -45,6 +47,7 @@ public final class SlotEngine implements IMinecraft {
       swapAge = mc.player.age;
       if (mc.player.getInventory().getSelectedSlot() != slot) {
          mc.player.getInventory().setSelectedSlot(slot);
+         signalHotbarKey(slot);
       }
       return true;
    }
@@ -85,6 +88,7 @@ public final class SlotEngine implements IMinecraft {
       }
       if (savedSlot >= 0 && mc.player.getInventory().getSelectedSlot() != savedSlot) {
          mc.player.getInventory().setSelectedSlot(savedSlot);
+         signalHotbarKey(savedSlot);
       }
       savedSlot = -1;
       activeSlot = -1;
@@ -100,7 +104,22 @@ public final class SlotEngine implements IMinecraft {
       activeSlot = slot;
       swapAge = mc.player.age;
       mc.player.getInventory().setSelectedSlot(slot);
+      signalHotbarKey(slot);
       return true;
+   }
+
+   private void signalHotbarKey(int slot) {
+      if (mc.options == null || mc.options.hotbarKeys == null) {
+         return;
+      }
+      KeyBinding binding = mc.options.hotbarKeys[slot];
+      if (binding == null) {
+         return;
+      }
+      InputUtil.Key key = InputUtil.fromTranslationKey(binding.getBoundKeyTranslationKey());
+      if (key != null && key.getCode() != InputUtil.UNKNOWN_KEY.getCode()) {
+         KeyBinding.onKeyPressed(key);
+      }
    }
 
    public void clearSwapTiming() {
