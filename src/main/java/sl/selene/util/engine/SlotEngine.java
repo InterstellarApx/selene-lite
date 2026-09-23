@@ -2,6 +2,7 @@ package sl.selene.util.engine;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import sl.selene.mixin.ClientPlayerInteractionManagerAccessor;
 import sl.selene.util.other.IMinecraft;
 
 @Environment(EnvType.CLIENT)
@@ -39,6 +40,15 @@ public final class SlotEngine implements IMinecraft {
       if (mc.player.getInventory().getSelectedSlot() != slot) {
          mc.player.getInventory().setSelectedSlot(slot);
       }
+      syncSelectedSlot();
+      return true;
+   }
+
+   public boolean selectNow(int slot) {
+      if (!begin(slot)) {
+         return false;
+      }
+      syncSelectedSlot();
       return true;
    }
 
@@ -72,6 +82,7 @@ public final class SlotEngine implements IMinecraft {
       if (savedSlot >= 0 && mc.player.getInventory().getSelectedSlot() != savedSlot) {
          mc.player.getInventory().setSelectedSlot(savedSlot);
       }
+      syncSelectedSlot();
       savedSlot = -1;
       activeSlot = -1;
    }
@@ -86,7 +97,14 @@ public final class SlotEngine implements IMinecraft {
       activeSlot = slot;
       swapAge = mc.player.age;
       mc.player.getInventory().setSelectedSlot(slot);
+      syncSelectedSlot();
       return true;
+   }
+
+   private void syncSelectedSlot() {
+      if (mc.interactionManager instanceof ClientPlayerInteractionManagerAccessor accessor) {
+         accessor.invokeSyncSelectedSlot();
+      }
    }
 
    public void clearSwapTiming() {
