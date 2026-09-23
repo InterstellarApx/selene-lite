@@ -11,7 +11,6 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.AxeItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.MaceItem;
-import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.hit.HitResult;
@@ -411,25 +410,7 @@ public final class AutoMace extends Module {
    }
 
    private boolean attackPreparedTarget() {
-      if (mc.player == null || mc.world == null || mc.interactionManager == null || target == null) {
-         return false;
-      }
-
-      EntityHitResult hitResult = raycastTarget(target);
-      if (hitResult == null || !hit.press(hitResult)) {
-         return false;
-      }
-
-      mc.crosshairTarget = hitResult;
-      mc.targetedEntity = target;
-      try {
-         mc.interactionManager.attackEntity(mc.player, target);
-         mc.player.swingHand(Hand.MAIN_HAND);
-         return true;
-      } finally {
-         clearQueuedAttack();
-         hit.release();
-      }
+      return attackTarget();
    }
 
    private void clearQueuedAttack() {
