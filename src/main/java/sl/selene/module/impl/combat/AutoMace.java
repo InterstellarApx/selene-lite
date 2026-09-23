@@ -318,6 +318,9 @@ public final class AutoMace extends Module {
          finishCycle();
          return;
       }
+      if (!slots.ready(1)) {
+         return;
+      }
       if (attackTarget()) {
          lastAttackMs = System.currentTimeMillis();
          beginRestore();
@@ -332,6 +335,9 @@ public final class AutoMace extends Module {
       if (preparedAxeSlot < 0 || !selectSlot(preparedAxeSlot)
             || !(mc.player.getMainHandStack().getItem() instanceof AxeItem)) {
          finishCycle();
+         return;
+      }
+      if (!slots.ready(1)) {
          return;
       }
       stunAxeExecuted = false;
@@ -354,13 +360,17 @@ public final class AutoMace extends Module {
          return;
       }
       long elapsedTicks = clientTickId - axeExecutedTickId;
-      if (elapsedTicks < legacyTickGap() && !isUrgent()) {
+      boolean urgent = isUrgent();
+      if (elapsedTicks < Math.max(1L, legacyTickGap() - 1L) && !urgent) {
          return;
       }
       state = State.STUN_MACE_READY;
       if (preparedMaceSlot < 0 || !selectSlot(preparedMaceSlot)
             || !(mc.player.getMainHandStack().getItem() instanceof MaceItem)) {
          finishCycle();
+         return;
+      }
+      if (!slots.ready(1) || elapsedTicks < legacyTickGap() && !urgent) {
          return;
       }
       stunMaceExecuted = false;
