@@ -426,7 +426,12 @@ public final class AutoMace extends Module {
             && hitResult.getEntity() == target) {
          return hitResult;
       }
-      return raycastTarget(target);
+      EntityHitResult hitResult = raycastTarget(target);
+      if (hitResult != null) {
+         mc.crosshairTarget = hitResult;
+         mc.targetedEntity = target;
+      }
+      return hitResult;
    }
 
    private boolean attackPreparedTarget() {
