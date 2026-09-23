@@ -426,7 +426,7 @@ public final class AutoMace extends Module {
             && hitResult.getEntity() == target) {
          return hitResult;
       }
-      return null;
+      return raycastTarget(target);
    }
 
    private boolean attackPreparedTarget() {
